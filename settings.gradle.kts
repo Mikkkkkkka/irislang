@@ -13,11 +13,10 @@ dependencyResolutionManagement {
     }
 }
 
-include(
-    ":core",
-    ":parser",
-    ":compiler",
-    ":vm",
-    ":jit",
-    ":cli",
-)
+val projects = arrayOf("core", "parser", "compiler", "vm", "jit", "cli")
+
+include(*projects)
+
+for (proj in projects) {
+    project(":$proj").projectDir = file("modules/$proj")
+}
