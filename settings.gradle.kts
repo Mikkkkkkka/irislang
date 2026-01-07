@@ -15,7 +15,7 @@ dependencyResolutionManagement {
 
 val projects = arrayOf("core", "parser", "compiler", "vm", "jit", "cli")
 
-include(*projects)
+include(*projects.map {proj -> ":$proj"}.toTypedArray())
 
 for (proj in projects) {
     project(":$proj").projectDir = file("modules/$proj")
