@@ -28,3 +28,6 @@ Desktop.ini
 
 # Env
 .env
+
+# Extras
+*.drawio
