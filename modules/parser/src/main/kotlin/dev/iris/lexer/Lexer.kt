@@ -45,6 +45,56 @@ class Lexer(
             when (c) {
                 '+' -> tokens.add(makeToken(TokenKind.PLUS, start, ++pos))
                 '-' -> tokens.add(makeToken(TokenKind.MINUS, start, ++pos))
+                '*' -> tokens.add(makeToken(TokenKind.STAR, start, ++pos))
+                '/' -> tokens.add(makeToken(TokenKind.SLASH, start, ++pos))
+                '%' -> tokens.add(makeToken(TokenKind.PERCENT, start, ++pos))
+                '(' -> tokens.add(makeToken(TokenKind.LPAREN, start, ++pos))
+                ')' -> tokens.add(makeToken(TokenKind.RPAREN, start, ++pos))
+                ',' -> tokens.add(makeToken(TokenKind.COMMA, start, ++pos))
+                '.' -> tokens.add(makeToken(TokenKind.DOT, start, ++pos))
+                ':' -> tokens.add(makeToken(TokenKind.COLON, start, ++pos))
+                ';' -> tokens.add(makeToken(TokenKind.SEMICOLON, start, ++pos))
+
+                '=' -> {
+                    pos++
+                    if (!isAtEnd() && text[pos] == '=') {
+                        pos++
+                        tokens.add(makeToken(TokenKind.EQEQ, start, pos))
+                    } else {
+                        tokens.add(makeToken(TokenKind.EQ, start, pos))
+                    }
+                }
+
+                '!' -> {
+                    pos++
+                    if (!isAtEnd() && text[pos] == '=') {
+                        pos++
+                        tokens.add(makeToken(TokenKind.NEQ, start, pos))
+                    } else {
+                        tokens.add(makeToken(TokenKind.BANG, start, pos))
+                    }
+                }
+
+                '<' -> {
+                    pos++
+                    if (!isAtEnd() && text[pos] == '=') {
+                        pos++
+                        tokens.add(makeToken(TokenKind.LTEQ, start, pos))
+                    } else {
+                        tokens.add(makeToken(TokenKind.LT, start, pos))
+                    }
+                }
+
+                '>' -> {
+                    pos++
+                    if (!isAtEnd() && text[pos] == '=') {
+                        pos++
+                        tokens.add(makeToken(TokenKind.GTEQ, start, pos))
+                    } else {
+                        tokens.add(makeToken(TokenKind.GT, start, pos))
+                    }
+                }
+
                 else -> {
                     tokens.add(makeError("Unexpected symbol: $c", start, pos))
                     pos++
