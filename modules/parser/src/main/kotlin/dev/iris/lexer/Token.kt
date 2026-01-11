@@ -1,4 +1,4 @@
-package dev.iris.tokenizer
+package dev.iris.lexer
 
 import dev.iris.core.Span
 
