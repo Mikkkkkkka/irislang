@@ -2,8 +2,8 @@ package dev.iris.parser
 
 import dev.iris.core.Diagnostic
 import dev.iris.core.Span
+import dev.iris.core.ast.PrintInt
 import dev.iris.core.ast.Program
-import dev.iris.core.ast.Stmt
 
 /**
  * Tiny line-based parser for the scaffold:
@@ -35,7 +35,7 @@ object Parser {
                         span = Span(lineStart, lineStart + raw.length)
                     )
                 } else {
-                    stmts += Stmt.PrintInt(n, span = Span(lineStart, lineStart + raw.length))
+                    stmts += PrintInt(n, span = Span(lineStart, lineStart + raw.length))
                 }
             } else {
                 diags += Diagnostic(

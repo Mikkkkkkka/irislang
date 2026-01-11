@@ -1,8 +1,8 @@
 package dev.iris.compiler
 
 import dev.iris.core.Diagnostic
+import dev.iris.core.ast.PrintInt
 import dev.iris.core.ast.Program
-import dev.iris.core.ast.Stmt
 import dev.iris.core.bytecode.BytecodeProgram
 import dev.iris.core.bytecode.Instr
 import dev.iris.core.bytecode.OpCode
@@ -15,7 +15,7 @@ object Compiler {
 
         for (stmt in ast.statements) {
             when (stmt) {
-                is Stmt.PrintInt -> {
+                is PrintInt -> {
                     out += Instr(OpCode.PUSH_I64, stmt.value)
                     out += Instr(OpCode.PRINT_I64)
                 }
