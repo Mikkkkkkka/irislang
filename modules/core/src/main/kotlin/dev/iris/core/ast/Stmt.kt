@@ -13,6 +13,7 @@ sealed interface Stmt {
     data class VarDecl(
         val type: TypeRef,
         val name: String,
+        val init: Expr? = null,
         override val span: Span? = null
     ) : Stmt
 

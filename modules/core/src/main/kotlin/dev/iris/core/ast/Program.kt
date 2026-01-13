@@ -1,7 +1,6 @@
 package dev.iris.core.ast
 
-import dev.iris.core.ast.Stmt
-
 data class Program(
+    val declarations: List<Decl>,
     val statements: List<Stmt>
 )
