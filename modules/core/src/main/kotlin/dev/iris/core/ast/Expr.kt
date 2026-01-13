@@ -13,4 +13,6 @@ sealed interface Expr {
     data class FieldAccess(val target: Expr, val field: String) : Expr
 
     data class New(val type: TypeRef, val expr: Expr?) : Expr
+
+    data class Assign(val target: Expr, val value: Expr) : Expr
 }
