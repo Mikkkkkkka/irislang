@@ -121,6 +121,43 @@ class VirtualMachine {
                     return VmResult(exitCode = 0)
                 }
 
+                OpCode.ADD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a + b))
+                }
+
+                OpCode.SUB -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a - b))
+                }
+
+                OpCode.MUL -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a * b))
+                }
+
+                OpCode.DIV -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Division by zero")
+                    push(Value.Int(a / b))
+                }
+
+                OpCode.MOD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Modulo by zero")
+                    push(Value.Int(a % b))
+                }
+
+                OpCode.NEG -> {
+                    val a = pop().toInt()
+                    push(Value.Int(-a))
+                }
+
                 else -> error("Unimplemented opcode: ${instr.op}")
             }
 
