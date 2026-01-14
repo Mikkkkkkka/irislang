@@ -20,6 +20,7 @@ class VirtualMachine {
                 OpCode.PUSH_I64 -> stack.addLast(ins.operand ?: error("Missing operand for PUSH_I64"))
                 OpCode.PRINT_I64 -> stdout(stack.removeLast().toString())
                 OpCode.HALT -> return VmResult(exitCode = 0)
+                else -> error("Unimplemented opcode: ${ins.op}")
             }
             ip++
         }
