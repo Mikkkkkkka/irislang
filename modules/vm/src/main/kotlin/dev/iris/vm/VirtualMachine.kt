@@ -158,6 +158,62 @@ class VirtualMachine {
                     push(Value.Int(-a))
                 }
 
+                OpCode.PUSH_TRUE -> push(Value.Bool(true))
+                OpCode.PUSH_FALSE -> push(Value.Bool(false))
+
+                OpCode.CMP_EQ -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a == b) 1 else 0))
+                }
+
+                OpCode.CMP_NE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a != b) 1 else 0))
+                }
+
+                OpCode.CMP_LT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a < b) 1 else 0))
+                }
+
+                OpCode.CMP_LE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a <= b) 1 else 0))
+                }
+
+                OpCode.CMP_GT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a > b) 1 else 0))
+                }
+
+                OpCode.CMP_GE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a >= b) 1 else 0))
+                }
+
+                OpCode.AND -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a && b) 1 else 0))
+                }
+
+                OpCode.OR -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a || b) 1 else 0))
+                }
+
+                OpCode.NOT -> {
+                    val a = pop().toBool()
+                    push(Value.Int(if (!a) 1 else 0))
+                }
+
                 else -> error("Unimplemented opcode: ${instr.op}")
             }
 
