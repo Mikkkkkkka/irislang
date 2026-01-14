@@ -133,6 +133,11 @@ class VirtualMachine(
                     stdout(value.toInt().toString())
                 }
 
+                OpCode.PRINT_BOOL -> {
+                    val value = pop()
+                    stdout(value.toBool().toString())
+                }
+
                 OpCode.HALT -> {
                     return VmResult(exitCode = 0)
                 }
