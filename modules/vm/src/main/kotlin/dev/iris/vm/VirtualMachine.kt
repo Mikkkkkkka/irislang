@@ -322,6 +322,47 @@ class VirtualMachine {
                     ip = frame.returnIp - 1  // -1 because ip++ at end of loop
                 }
 
+                OpCode.POP -> {
+                    pop()
+                }
+
+                OpCode.DUP -> {
+                    val value = peek()
+                    push(value)
+                }
+
+                OpCode.ALLOC_ARR -> {
+                    val size = pop().toInt().toInt()
+                    if (size < 0) error("Negative array size: $size")
+                    val ref = allocArray(size)
+                    push(ref)
+                }
+
+                OpCode.STORE_ARR -> {
+                    val value = pop()
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("STORE_ARR expects HeapRef, got $arrayRef")
+
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("STORE_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+
+                    obj.elements[index] = value
+                }
+
+                OpCode.LOAD_ARR -> {
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("LOAD_ARR expects HeapRef, got $arrayRef")
+
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("LOAD_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+
+                    push(obj.elements[index])
+                }
+
                 else -> error("Unimplemented opcode: ${instr.op}")
             }
 
