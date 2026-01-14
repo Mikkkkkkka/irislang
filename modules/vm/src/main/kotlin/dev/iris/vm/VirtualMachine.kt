@@ -10,7 +10,8 @@ import dev.iris.core.bytecode.OpCode
  * asynchronously in background threads.
  */
 class VirtualMachine(
-    private val jit: JitHooks? = null
+    private val jit: JitHooks? = null,
+    private val gcTriggerThreshold: Int = 100  // Trigger GC every N allocations
 ) {
 
     // Operand stack for expression evaluation
@@ -30,6 +31,9 @@ class VirtualMachine(
 
     // Current instruction pointer
     private var ip = 0
+
+    // Allocation counter for GC triggering
+    private var allocationsSinceLastGc = 0
 
     /**
      * Push a value onto the operand stack.
@@ -59,6 +63,7 @@ class VirtualMachine(
      */
     fun allocArray(size: Int): Value.HeapRef {
         val ref = heap.allocArray(size)
+        trackAllocation()
         return Value.HeapRef(ref)
     }
 
@@ -67,7 +72,19 @@ class VirtualMachine(
      */
     fun allocStruct(typeIndex: Int, fieldCount: Int): Value.HeapRef {
         val ref = heap.allocStruct(typeIndex, fieldCount)
+        trackAllocation()
         return Value.HeapRef(ref)
+    }
+
+    /**
+     * Track an allocation and trigger GC if threshold is reached.
+     */
+    private fun trackAllocation() {
+        allocationsSinceLastGc++
+        if (allocationsSinceLastGc >= gcTriggerThreshold) {
+            collectGarbage()
+            allocationsSinceLastGc = 0
+        }
     }
 
     /**
