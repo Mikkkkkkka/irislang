@@ -1,4 +1,4 @@
-package dev.iris.lexer
+package dev.iris.parser.lexer
 
 import dev.iris.core.Diagnostic
 import dev.iris.core.Span

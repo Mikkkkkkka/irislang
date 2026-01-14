@@ -1,4 +1,4 @@
-package dev.iris.parser
+package dev.iris.parser.parser
 
 import dev.iris.core.Diagnostic
 import dev.iris.core.ast.Program
