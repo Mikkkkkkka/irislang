@@ -9,7 +9,9 @@ import dev.iris.core.bytecode.OpCode
  * The VM is single-threaded for execution. JIT compilation happens
  * asynchronously in background threads.
  */
-class VirtualMachine {
+class VirtualMachine(
+    private val jit: JitHooks? = null
+) {
 
     // Operand stack for expression evaluation
     private val stack = ArrayDeque<Value>()
@@ -288,15 +290,26 @@ class VirtualMachine {
                     val funcIndex = instr.operand?.toInt() ?: error("Missing operand for CALL")
                     if (funcIndex >= program.functions.size) error("Function index out of bounds: $funcIndex")
 
-                    val funcInfo = program.functions[funcIndex]
-                    val frame = CallFrame(
-                        funcIndex = funcIndex,
-                        returnIp = ip + 1,  // Return to next instruction after CALL
-                        locals = Array(funcInfo.localCount) { Value.Int(0) },
-                        basePointer = stack.size
-                    )
-                    callStack.addLast(frame)
-                    ip = funcInfo.startIp - 1  // -1 because ip++ at end of loop
+                    // JIT integration: check if function is compiled
+                    val compiled = jit?.getCompiled(funcIndex)
+                    if (compiled != null) {
+                        // Execute compiled version
+                        compiled.execute(this)
+                    } else {
+                        // Notify JIT about the call (for hot function detection)
+                        jit?.notifyCall(funcIndex)
+
+                        // Interpret the function
+                        val funcInfo = program.functions[funcIndex]
+                        val frame = CallFrame(
+                            funcIndex = funcIndex,
+                            returnIp = ip + 1,  // Return to next instruction after CALL
+                            locals = Array(funcInfo.localCount) { Value.Int(0) },
+                            basePointer = stack.size
+                        )
+                        callStack.addLast(frame)
+                        ip = funcInfo.startIp - 1  // -1 because ip++ at end of loop
+                    }
                 }
 
                 OpCode.RET -> {
