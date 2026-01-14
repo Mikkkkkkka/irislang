@@ -363,6 +363,52 @@ class VirtualMachine {
                     push(obj.elements[index])
                 }
 
+                OpCode.ALLOC_STRUCT -> {
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for ALLOC_STRUCT")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+
+                OpCode.STORE_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for STORE_FIELD")
+                    val value = pop()
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("STORE_FIELD expects HeapRef, got $structRef")
+
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("STORE_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+
+                    obj.fields[fieldIndex] = value
+                }
+
+                OpCode.LOAD_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for LOAD_FIELD")
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("LOAD_FIELD expects HeapRef, got $structRef")
+
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("LOAD_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+
+                    push(obj.fields[fieldIndex])
+                }
+
+                OpCode.NEW -> {
+                    // NEW is treated as an alias for ALLOC_STRUCT
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for NEW")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+
                 else -> error("Unimplemented opcode: ${instr.op}")
             }
 
