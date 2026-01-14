@@ -214,6 +214,46 @@ class VirtualMachine {
                     push(Value.Int(if (!a) 1 else 0))
                 }
 
+                OpCode.JMP -> {
+                    val target = instr.operand ?: error("Missing operand for JMP")
+                    ip = target.toInt() - 1  // -1 because ip++ at end of loop
+                }
+
+                OpCode.JMP_IF_FALSE -> {
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_FALSE")
+                    val condition = pop().toBool()
+                    if (!condition) {
+                        ip = target.toInt() - 1  // -1 because ip++ at end of loop
+                    }
+                }
+
+                OpCode.JMP_IF_TRUE -> {
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_TRUE")
+                    val condition = pop().toBool()
+                    if (condition) {
+                        ip = target.toInt() - 1  // -1 because ip++ at end of loop
+                    }
+                }
+
+                OpCode.LOAD_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_GLOBAL")
+                    // Ensure globals list is large enough
+                    while (globals.size <= index) {
+                        globals.add(Value.Int(0))
+                    }
+                    push(globals[index])
+                }
+
+                OpCode.STORE_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_GLOBAL")
+                    val value = pop()
+                    // Ensure globals list is large enough
+                    while (globals.size <= index) {
+                        globals.add(Value.Int(0))
+                    }
+                    globals[index] = value
+                }
+
                 else -> error("Unimplemented opcode: ${instr.op}")
             }
 
