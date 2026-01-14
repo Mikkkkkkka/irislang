@@ -103,6 +103,20 @@ class VirtualMachine {
         val code = program.instructions
         ip = 0
 
+        // Initialize with a main call frame if functions are defined
+        if (program.functions.isNotEmpty()) {
+            val mainFunc = program.functions.find { it.startIp == 0 }
+            if (mainFunc != null) {
+                val frame = CallFrame(
+                    funcIndex = 0,
+                    returnIp = -1,  // Sentinel value for main function
+                    locals = Array(mainFunc.localCount) { Value.Int(0) },
+                    basePointer = 0
+                )
+                callStack.addLast(frame)
+            }
+        }
+
         while (ip in code.indices) {
             val instr = code[ip]
 
@@ -252,6 +266,60 @@ class VirtualMachine {
                         globals.add(Value.Int(0))
                     }
                     globals[index] = value
+                }
+
+                OpCode.LOAD_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for LOAD_LOCAL")
+                    val frame = callStack.last()
+                    if (index >= frame.locals.size) error("Local index out of bounds: $index")
+                    push(frame.locals[index])
+                }
+
+                OpCode.STORE_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for STORE_LOCAL")
+                    val frame = callStack.last()
+                    if (index >= frame.locals.size) error("Local index out of bounds: $index")
+                    frame.locals[index] = pop()
+                }
+
+                OpCode.CALL -> {
+                    val funcIndex = instr.operand?.toInt() ?: error("Missing operand for CALL")
+                    if (funcIndex >= program.functions.size) error("Function index out of bounds: $funcIndex")
+
+                    val funcInfo = program.functions[funcIndex]
+                    val frame = CallFrame(
+                        funcIndex = funcIndex,
+                        returnIp = ip + 1,  // Return to next instruction after CALL
+                        locals = Array(funcInfo.localCount) { Value.Int(0) },
+                        basePointer = stack.size
+                    )
+                    callStack.addLast(frame)
+                    ip = funcInfo.startIp - 1  // -1 because ip++ at end of loop
+                }
+
+                OpCode.RET -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    val returnValue = pop()
+                    val frame = callStack.removeLast()
+                    if (frame.returnIp == -1) {
+                        // Returning from main, halt execution
+                        push(returnValue)
+                        return VmResult(exitCode = 0)
+                    }
+                    ip = frame.returnIp - 1  // -1 because ip++ at end of loop
+                    push(returnValue)
+                }
+
+                OpCode.RET_VOID -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    val frame = callStack.removeLast()
+                    if (frame.returnIp == -1) {
+                        // Returning from main, halt execution
+                        return VmResult(exitCode = 0)
+                    }
+                    ip = frame.returnIp - 1  // -1 because ip++ at end of loop
                 }
 
                 else -> error("Unimplemented opcode: ${instr.op}")
