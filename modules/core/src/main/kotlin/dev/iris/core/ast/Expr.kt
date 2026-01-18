@@ -11,8 +11,8 @@ sealed interface Expr {
     data class Call(val callee: String, val args: List<Expr>) : Expr
 
     data class FieldAccess(val target: Expr, val field: String) : Expr
+    data class Deref(val expr: Expr) : Expr
+    data class Addr(val expr: Expr) : Expr
 
     data class New(val type: TypeRef, val expr: Expr?) : Expr
-
-    data class Assign(val target: Expr, val value: Expr) : Expr
 }
