@@ -54,6 +54,7 @@ class Lexer(
                 '.' -> tokens.add(makeToken(TokenKind.DOT, start, ++pos))
                 ':' -> tokens.add(makeToken(TokenKind.COLON, start, ++pos))
                 ';' -> tokens.add(makeToken(TokenKind.SEMICOLON, start, ++pos))
+                '?' -> tokens.add(makeToken(TokenKind.QUESTION, start, ++pos))
 
                 '=' -> {
                     pos++
@@ -128,14 +129,17 @@ class Lexer(
             "кц" to TokenKind.KW_END,
             "функция" to TokenKind.KW_FUNCTION,
             "процедура" to TokenKind.KW_PROCEDURE,
-            "структ" to TokenKind.KW_STRUCT,
+            "структура" to TokenKind.KW_STRUCTURE,
             "вернуть" to TokenKind.KW_RETURN,
             "выйти" to TokenKind.KW_BREAK,
             "продолжить" to TokenKind.KW_CONTINUE,
             "новый" to TokenKind.KW_NEW,
             "печать" to TokenKind.KW_PRINT,
             "правда" to TokenKind.KW_TRUE,
-            "ложь" to TokenKind.KW_FALSE
+            "ложь" to TokenKind.KW_FALSE,
+            "и" to TokenKind.KW_AND,
+            "или" to TokenKind.KW_OR,
+            "нуль" to TokenKind.KW_NULL,
         )
     }
 }
