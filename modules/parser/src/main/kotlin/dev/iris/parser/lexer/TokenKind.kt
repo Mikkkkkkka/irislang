@@ -1,4 +1,4 @@
-package dev.iris.lexer
+package dev.iris.parser.lexer
 
 // Idea ругается на кириллицу в коде
 enum class TokenKind {
