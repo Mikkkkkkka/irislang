@@ -7,6 +7,8 @@ enum class Operator {
     DIVIDE,
     REMAINING,
 
+    AND,
+    OR,
     NOT,
     EQUAL,
     NOT_EQUAL,
@@ -14,4 +16,7 @@ enum class Operator {
     LESS,
     GREATER_EQUAL,
     LESS_EQUAL,
+
+    ADDRESS,
+    DEREFERENCE,
 }

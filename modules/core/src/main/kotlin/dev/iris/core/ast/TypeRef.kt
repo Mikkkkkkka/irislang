@@ -5,5 +5,4 @@ interface TypeRef {
     data object BoolType: TypeRef
     data class StructType(val name: String): TypeRef
     data class Pointer(val base: TypeRef): TypeRef
-    data class Array(val base: TypeRef, val size: ULong): TypeRef
 }
