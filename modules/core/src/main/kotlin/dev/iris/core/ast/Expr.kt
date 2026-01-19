@@ -15,4 +15,6 @@ sealed interface Expr {
     data class Addr(val expr: Expr) : Expr
 
     data class New(val type: TypeRef, val expr: Expr?) : Expr
+
+    data class Assign(val target: Expr, val expr: Expr) : Expr
 }
