@@ -1,8 +1,8 @@
 package dev.iris.core.ast
 
 enum class Operator {
-    PLUS,
-    MINUS,
+    ADD,
+    SUBTRACT,
     MULTIPLY,
     DIVIDE,
     REMAINING,
@@ -17,6 +17,7 @@ enum class Operator {
     GREATER_EQUAL,
     LESS_EQUAL,
 
+    NEGATIVE,
     ADDRESS,
     DEREFERENCE,
 }

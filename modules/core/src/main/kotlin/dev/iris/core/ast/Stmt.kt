@@ -31,7 +31,7 @@ sealed interface Stmt {
     ) : Stmt
 
     data class Return(
-        val expr: Expr,
+        val expr: Expr?,
         override val span: Span? = null
     ) : Stmt
 
