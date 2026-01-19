@@ -70,12 +70,10 @@ class EndToEndPipelineTest {
             целч результат = факториал(5);
             печать:результат;
         """.trimIndent()
-        var output = ""
-        val printer: (String) -> Unit = { message -> output += "$message\n" }
 
         val expectedOutput = "120\n"
 
-        parseAndCompileAndRun(source, printer)
+        val output = runAndCollectOutput(source)
         assertEquals(expectedOutput, output)
     }
 
@@ -93,12 +91,10 @@ class EndToEndPipelineTest {
 
             печать:(факториал(10));
         """.trimIndent()
-        var output = ""
-        val printer: (String) -> Unit = { message -> output += "$message\n" }
 
         val expectedOutput = "3628800\n"
 
-        parseAndCompileAndRun(source, printer)
+        val output = runAndCollectOutput(source)
         assertEquals(expectedOutput, output)
     }
 
@@ -124,12 +120,9 @@ class EndToEndPipelineTest {
             печать:ф4;
         """.trimIndent()
 
-        var output = ""
-        val printer: (String) -> Unit = { message -> output += "$message\n" }
-
         val expectedOutput = "1\n1\n6\n120\n"
 
-        parseAndCompileAndRun(source, printer)
+        val output = runAndCollectOutput(source)
         assertEquals(expectedOutput, output)
     }
 
@@ -154,12 +147,9 @@ class EndToEndPipelineTest {
             печать:р10;
         """.trimIndent()
 
-        var output = ""
-        val printer: (String) -> Unit = { message -> output += "$message\n" }
-
         val expectedOutput = "120\n3628800\n"
 
-        parseAndCompileAndRun(source, printer)
+        val output = runAndCollectOutput(source)
         assertEquals(expectedOutput, output)
     }
 
@@ -176,12 +166,9 @@ class EndToEndPipelineTest {
             печать:сумма;
         """.trimIndent()
 
-        var output = ""
-        val printer: (String) -> Unit = { message -> output += "$message\n" }
-
         val expectedOutput = "55\n"
 
-        parseAndCompileAndRun(source, printer)
+        val output = runAndCollectOutput(source)
         assertEquals(expectedOutput, output)
     }
 
