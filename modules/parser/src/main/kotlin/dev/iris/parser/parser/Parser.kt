@@ -167,6 +167,8 @@ class Parser(
 
             match(TokenKind.KW_WHILE) -> parseWhileStmt()
 
+            match(TokenKind.KW_FOR) -> parseForStmt()
+
             match(TokenKind.KW_RETURN) -> {
                 val value = if (check(TokenKind.SEMICOLON)) null else parseExpr()
                 expectStmtTerminator("Ожидался ';' после 'вернуть'.")
@@ -254,6 +256,19 @@ class Parser(
         expect(TokenKind.RPAREN, "Ожидалась ')' после условия 'пока'.")
         val body = parseBlock()
         return Stmt.While(cond, body)
+    }
+
+    private fun parseForStmt(): Stmt.For {
+        expect(TokenKind.LPAREN, "Ожидалась '(' после 'для'.")
+        expect(TokenKind.KW_INT, "Ожидался тип 'целч' в цикле 'для'.")
+        val nameTok = expect(TokenKind.IDENT, "Ожидалось имя переменной цикла.")
+        expect(TokenKind.KW_FROM, "Ожидалось 'от' после имени переменной.")
+        val start = parseExpr()
+        expect(TokenKind.KW_TO, "Ожидалось 'до' после начального значения.")
+        val end = parseExpr()
+        expect(TokenKind.RPAREN, "Ожидалась ')' после конечного значения.")
+        val body = parseBlock()
+        return Stmt.For(nameTok.lexeme, start, end, body)
     }
 
     private fun parseVarDeclStmt(): Stmt.VarDecl {
@@ -422,7 +437,13 @@ class Parser(
             expr = when {
                 match(TokenKind.DOT) -> {
                     val fieldTok = expect(TokenKind.IDENT, "Ожидалось имя поля после '.'.")
-                    Expr.FieldAccess(expr,  fieldTok.lexeme)
+                    Expr.FieldAccess(expr, fieldTok.lexeme)
+                }
+
+                match(TokenKind.LBRACKET) -> {
+                    val index = parseExpr()
+                    expect(TokenKind.RBRACKET, "Ожидалась ']' после индекса массива.")
+                    Expr.ArrayAccess(expr, index)
                 }
 
                 match(TokenKind.LPAREN) -> {
@@ -534,6 +555,7 @@ class Parser(
     private fun isStmtStart(kind: TokenKind): Boolean =
         kind == TokenKind.KW_IF ||
                 kind == TokenKind.KW_WHILE ||
+                kind == TokenKind.KW_FOR ||
                 kind == TokenKind.KW_RETURN ||
                 kind == TokenKind.KW_BREAK ||
                 kind == TokenKind.KW_CONTINUE ||

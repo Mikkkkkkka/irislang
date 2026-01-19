@@ -30,6 +30,14 @@ sealed interface Stmt {
         override val span: Span? = null,
     ) : Stmt
 
+    data class For(
+        val varName: String,
+        val start: Expr,
+        val end: Expr,
+        val body: Block,
+        override val span: Span? = null
+    ) : Stmt
+
     data class Return(
         val expr: Expr?,
         override val span: Span? = null

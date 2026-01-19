@@ -6,7 +6,8 @@ import dev.iris.jit.pipeline.BytecodeLowering
 import dev.iris.jit.pipeline.PipelineJitCompiler
 import dev.iris.jit.runtime.AsyncJit
 import dev.iris.jit.support.SingleFunctionProvider
-import dev.iris.parser.Parser
+import dev.iris.parser.lexer.Lexer
+import dev.iris.parser.parser.Parser
 import dev.iris.vm.VirtualMachine
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,19 +22,20 @@ fun main(args: Array<String>) {
         }
         Files.readString(p)
     } else {
-        // Demo program if no args
-        "print 1\nprint 2\nprint 3\n"
+        "печать:1;\nпечать:2;\nпечать:3;\n"
     }
 
-    val parse = Parser.parse(source)
-    parse.diagnostics.forEach { d -> System.err.println("[parse] ${d.severity}: ${d.message}") }
-    val ast = parse.program ?: exitProcess(1)
+    val lexResult = Lexer(source).tokenize()
+    lexResult.diagnostics.forEach { d -> System.err.println("[lex] ${d.severity}: ${d.message}") }
+
+    val parseResult = Parser(lexResult.tokens).parse()
+    parseResult.diagnostics.forEach { d -> System.err.println("[parse] ${d.severity}: ${d.message}") }
+    val ast = parseResult.program ?: exitProcess(1)
 
     val comp = Compiler.compile(ast)
     comp.diagnostics.forEach { d -> System.err.println("[compile] ${d.severity}: ${d.message}") }
     val bytecode = comp.program ?: exitProcess(1)
 
-    // Async JIT demo: compile the only function (index 0) in background.
     val provider = SingleFunctionProvider(bytecode)
     val jitCompiler = PipelineJitCompiler(
         BytecodeLowering(provider),

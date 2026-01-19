@@ -7,6 +7,9 @@ enum class TokenKind {
     KW_INT, KW_BOOL,    // целч бул
     KW_IF, KW_ELSE,     // если иначе
     KW_WHILE,           // пока
+    KW_FOR,             // для
+    KW_FROM,            // от
+    KW_TO,              // до
     KW_RETURN,          // вернуть
     KW_CONTINUE,        // продолжить
     KW_BREAK,           // выйти
@@ -26,7 +29,8 @@ enum class TokenKind {
     LT, GT, GTEQ, LTEQ,                 // < > <= >=
     DOT, COMMA, COLON, SEMICOLON,       // . , : ;
     LPAREN, RPAREN,                     // ( )
+    LBRACKET, RBRACKET,                 // [ ]
 
-    ERROR,              // (для ошибок)
+    ERROR,
     EOF,
 }
