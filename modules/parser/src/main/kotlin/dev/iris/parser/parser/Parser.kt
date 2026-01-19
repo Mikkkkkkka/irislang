@@ -22,7 +22,7 @@ class Parser(
 
         while (!isAtEnd()) {
             when (peek().kind) {
-                TokenKind.KW_STRUCT -> declarations += parseStruct()
+                TokenKind.KW_STRUCTURE -> declarations += parseStruct()
                 TokenKind.KW_FUNCTION -> declarations += parseFunction()
                 TokenKind.KW_PROCEDURE -> declarations += parseProcedure()
                 else -> statements += parseStmt()
@@ -42,7 +42,7 @@ class Parser(
             val fieldStart = peek().span
             val fieldType = parseType()
             val fieldName = expect(TokenKind.IDENT, "Имя поля").lexeme
-            fields += Stmt.VarDecl(fieldType, fieldName, null,fieldStart)
+            fields += Stmt.VarDecl(fieldType, fieldName, null, fieldStart)
         }
 
         expect(TokenKind.KW_END, "Ожидалось 'кц'")
@@ -74,7 +74,7 @@ class Parser(
                 val start = peek().span
                 val type = parseType()
                 val name = expect(TokenKind.IDENT, "Имя параметра").lexeme
-                params += Stmt.VarDecl(type, name, null,start)
+                params += Stmt.VarDecl(type, name, null, start)
             } while (match(TokenKind.COMMA))
         }
 
@@ -157,84 +157,158 @@ class Parser(
             t = TypeRef.Pointer(t)
         }
 
-        if (match(TokenKind.COLON)) {
-            val size = expect(TokenKind.INT_LITERAL, "Ожидалась числовая константа").lexeme.toULong()
-            t = TypeRef.Array(t, size)
-        }
-
         return t
     }
 
     // Выражения
-    private fun parseExpr(): Expr = parseEquality()
+    private fun parseExpr(): Expr = parseAssignment()
 
-    private fun parseEquality(): Expr {
-        var expr = parseAdd()
-
-        while (match(TokenKind.EQEQ, TokenKind.NEQ)) {
-            val op = previous().kind
-            val right = parseAdd()
-            expr = Expr.Binary(expr, mapTokenTypeToOperator(op), right)
+    private fun parseAssignment(): Expr {
+        val left = parseBinaryExpr(0)
+        if (match(TokenKind.EQ)) {
+            val value = parseAssignment()
+            return Expr.Assign(left, value)
         }
-
-        return expr
+        return left
     }
 
-    private fun parseAdd(): Expr {
-        var expr = parseMul()
+    private fun parseBinaryExpr(minPrec: Int): Expr {
+        var left = parsePrefix()
 
-        while (match(TokenKind.PLUS, TokenKind.MINUS)) {
-            val op = previous().kind
-            val right = parseMul()
-            expr = Expr.Binary(expr, mapTokenTypeToOperator(op), right)
+        while (true) {
+            val (prec, op) = infixInfo(peek().kind) ?: break
+            if (prec < minPrec) break
+
+            advance()
+            val right = parseBinaryExpr(prec + 1)
+            left = Expr.Binary(left, op, right)
         }
 
-        return expr
+        return left
     }
 
-    private fun parseMul(): Expr {
-        var expr = parsePrimary()
+    private fun parsePrefix(): Expr {
+        when {
+            match(TokenKind.MINUS) -> {
+                val expr = parseBinaryExpr(100)
+                return Expr.Unary(Operator.MINUS, expr)
+            }
 
-        while (match(TokenKind.STAR, TokenKind.SLASH, TokenKind.PERCENT)) {
-            val op = previous().kind
-            val right = parsePrimary()
-            expr = Expr.Binary(expr, mapTokenTypeToOperator(op), right)
+            match(TokenKind.BANG) -> {
+                val expr = parseBinaryExpr(100)
+                return Expr.Unary(Operator.NOT, expr)
+            }
+
+            match(TokenKind.STAR) -> {
+                val expr = parseBinaryExpr(100)
+                return Expr.Unary(Operator.DEREFERENCE, expr)
+            }
+
+            match(TokenKind.QUESTION) -> {
+                val expr = parseBinaryExpr(100)
+                return Expr.Unary(Operator.ADDRESS, expr)
+            }
+
+            else -> return parsePostfix(parsePrimary())
+        }
+    }
+
+    private fun parsePostfix(start: Expr): Expr {
+        var expr = start
+
+        while (true) {
+            expr = when {
+                match(TokenKind.DOT) -> {
+                    val fieldTok = expect(TokenKind.IDENT, "Имя поля после \".\"")
+                    Expr.FieldAccess(expr, fieldTok.lexeme)
+                }
+
+                match(TokenKind.LPAREN) -> {
+                    val args = parseCallArgs()
+                    val calleeName = when (expr) {
+                        is Expr.Var -> expr.name
+                        else -> error("Вызов функции ожидает имя функции")
+                    }
+                    Expr.Call(calleeName, args)
+                }
+
+                else -> return expr
+            }
+        }
+    }
+
+    private fun parseCallArgs(): List<Expr> {
+        val args = mutableListOf<Expr>()
+        if (check(TokenKind.RPAREN)) {
+            advance()
+            return args
         }
 
-        return expr
+        do {
+            args += parseExpr()
+        } while (match(TokenKind.COMMA))
+
+        expect(TokenKind.RPAREN, "\")\" после вызова функции")
+        return args
     }
 
     private fun parsePrimary(): Expr {
-        if (match(TokenKind.INT_LITERAL)) return Expr.IntLiteral(previous().lexeme.toInt())
+        if (match(TokenKind.KW_PRINT)) {
+            expect(TokenKind.COLON, "\":\" после \"печать\"")
+            expect(TokenKind.LPAREN, "\"(\" после \"печать:\"") // TODO: add "печать:<переменная>"
+            val e = parseExpr()
+            expect(TokenKind.RPAREN, "\")\" после \"печать(<выражение>\"")
+            return Expr.Call("печать:", listOf(e))
+        }
+        if (match(TokenKind.KW_NEW)) {
+            expect(TokenKind.COLON, "\":\" после \"новый\"")
+            val t = parseType()
+            var size: Expr? = null
+            if (match(TokenKind.COLON)) {
+                size = parseExpr()                                          // TODO: potential problems!
+            }
+            return Expr.New(t, size)
+        }
+
+        if (match(TokenKind.INT_LITERAL)) {
+            val tok = previous()
+            return Expr.IntLiteral(tok.lexeme.toInt())              // TODO: potential problems!
+        }
+
         if (match(TokenKind.KW_TRUE)) return Expr.BoolLiteral(true)
         if (match(TokenKind.KW_FALSE)) return Expr.BoolLiteral(false)
 
-        if (match(TokenKind.KW_PRINT)) {
-            expect(TokenKind.COLON, ":")
-            expect(TokenKind.LPAREN, "(")
-            val e = parseExpr()
-            expect(TokenKind.RPAREN, ")")
-            return Expr.Call("печать:", listOf(e))
-        }
-
-        if (match(TokenKind.KW_NEW)) {
-            expect(TokenKind.COLON, ":")
-            val type = parseType()
-            val size = if (match(TokenKind.COLON)) parseExpr() else null
-            return Expr.New(type, size)
-        }
-
         if (match(TokenKind.IDENT)) {
-            return Expr.Var(previous().lexeme)
+            val tok = previous()
+            return Expr.Var(tok.lexeme)
         }
 
         if (match(TokenKind.LPAREN)) {
+            val beginParenSpan = previous().span
             val e = parseExpr()
-            expect(TokenKind.RPAREN, ")")
+            expect(TokenKind.RPAREN, "\")\" после \"(\" на $beginParenSpan")
             return e
         }
 
         error("Ожидалось выражение")
+    }
+
+    private fun infixInfo(kind: TokenKind): Pair<Int, Operator>? = when (kind) {
+        TokenKind.STAR -> 50 to Operator.MULTIPLY
+        TokenKind.SLASH -> 50 to Operator.DIVIDE
+        TokenKind.PERCENT -> 50 to Operator.REMAINING
+
+        TokenKind.PLUS -> 40 to Operator.PLUS
+        TokenKind.MINUS -> 40 to Operator.MINUS
+
+        TokenKind.LT -> 30 to Operator.LESS
+        TokenKind.GT -> 30 to Operator.GREATER
+        TokenKind.LTEQ -> 30 to Operator.LESS_EQUAL
+        TokenKind.GTEQ -> 30 to Operator.GREATER_EQUAL
+
+        TokenKind.EQEQ -> 20 to Operator.EQUAL
+        TokenKind.NEQ -> 20 to Operator.NOT_EQUAL
+        else -> null
     }
 
     // Вспомогательные штуки
@@ -260,33 +334,11 @@ class Parser(
     private fun isAtEnd(): Boolean = peek().kind == TokenKind.EOF
 
     private fun isTypeStart(kind: TokenKind) =
-        kind == TokenKind.KW_INT ||
-                kind == TokenKind.KW_BOOL ||
-                kind == TokenKind.IDENT
+        kind == TokenKind.KW_INT || kind == TokenKind.KW_BOOL
 
     private fun error(msg: String): Nothing {
         diagnostics += Diagnostic("Parser Error: $msg", peek().span)
         throw ParserPanic(msg)
-    }
-
-    private fun mapTokenTypeToOperator(kind: TokenKind): Operator {
-        return when (kind) {
-            TokenKind.PLUS -> Operator.PLUS
-            TokenKind.MINUS -> Operator.MINUS
-            TokenKind.STAR -> Operator.MULTIPLY
-            TokenKind.SLASH -> Operator.DIVIDE
-            TokenKind.PERCENT -> Operator.REMAINING
-
-            TokenKind.BANG -> Operator.NOT
-            TokenKind.EQEQ -> Operator.EQUAL
-            TokenKind.NEQ -> Operator.NOT_EQUAL
-            TokenKind.GT -> Operator.GREATER
-            TokenKind.LT -> Operator.LESS
-            TokenKind.GTEQ -> Operator.GREATER_EQUAL
-            TokenKind.LTEQ -> Operator.LESS_EQUAL
-
-            else -> error("Token $kind is not an operator")
-        }
     }
 
     private class ParserPanic(msg: String) : RuntimeException(msg)
