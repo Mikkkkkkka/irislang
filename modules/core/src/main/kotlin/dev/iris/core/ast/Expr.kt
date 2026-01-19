@@ -18,4 +18,8 @@ sealed interface Expr {
     data class New(val type: TypeRef, val size: Expr?) : Expr
 
     data class Assign(val target: Expr, val expr: Expr) : Expr
+
+    data class ArrayAccess(val array: Expr, val index: Expr) : Expr
+
+    data class ArrayLiteral(val elements: List<Expr>) : Expr
 }

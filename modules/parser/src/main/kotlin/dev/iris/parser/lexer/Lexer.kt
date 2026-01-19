@@ -55,6 +55,8 @@ class Lexer(
                 ':' -> tokens.add(makeToken(TokenKind.COLON, start, ++pos))
                 ';' -> tokens.add(makeToken(TokenKind.SEMICOLON, start, ++pos))
                 '?' -> tokens.add(makeToken(TokenKind.QUESTION, start, ++pos))
+                '[' -> tokens.add(makeToken(TokenKind.LBRACKET, start, ++pos))
+                ']' -> tokens.add(makeToken(TokenKind.RBRACKET, start, ++pos))
 
                 '=' -> {
                     pos++
@@ -125,6 +127,9 @@ class Lexer(
             "если" to TokenKind.KW_IF,
             "иначе" to TokenKind.KW_ELSE,
             "пока" to TokenKind.KW_WHILE,
+            "для" to TokenKind.KW_FOR,
+            "от" to TokenKind.KW_FROM,
+            "до" to TokenKind.KW_TO,
             "нч" to TokenKind.KW_START,
             "кц" to TokenKind.KW_END,
             "функция" to TokenKind.KW_FUNCTION,
