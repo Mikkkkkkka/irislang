@@ -16,7 +16,7 @@ class BaselineCodeEmitterTest {
 
     @Test
     fun `baseline compiled function runs simple program`() {
-        val printed = mutableListOf<Long>()
+        val printed = mutableListOf<String>()
         val program = BytecodeProgram(
             listOf(
                 Instr(OpCode.PUSH_I64, 1),
@@ -38,7 +38,7 @@ class BaselineCodeEmitterTest {
         val compiled = jit.compile(0)
         compiled.execute(dev.iris.vm.VirtualMachine())
 
-        assertEquals(listOf(1L, 2L), printed)
+        assertEquals(listOf("1", "2"), printed)
     }
 
     @Test
