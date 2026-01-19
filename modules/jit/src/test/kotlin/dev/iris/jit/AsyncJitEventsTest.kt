@@ -4,7 +4,7 @@ import dev.iris.jit.runtime.AsyncJit
 import dev.iris.jit.runtime.JitEvent
 import dev.iris.jit.runtime.JitEventSink
 import dev.iris.jit.support.MockJitCompiler
-import dev.iris.jit.support.RunnableCompiledFunction
+import dev.iris.jit.support.SimpleCompiledFunction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -17,7 +17,7 @@ class AsyncJitEventsTest {
     fun `emits start and success events`() = runBlocking {
         val events = mutableListOf<JitEvent>()
         val sink = JitEventSink { events += it }
-        val compiler = MockJitCompiler { _ -> RunnableCompiledFunction { } }
+        val compiler = MockJitCompiler { _ -> SimpleCompiledFunction { } }
 
         val jit = AsyncJit(compiler, funcCount = 1, events = sink)
         val job = jit.ensureCompilation(0)

@@ -3,7 +3,7 @@ package dev.iris.jit
 import dev.iris.jit.api.CompiledFunction
 import dev.iris.jit.runtime.JitState
 import dev.iris.jit.runtime.JitStateTable
-import dev.iris.jit.support.RunnableCompiledFunction
+import dev.iris.jit.support.SimpleCompiledFunction
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +22,7 @@ class JitStateTableTest {
         assertEquals(JitState.COMPILING, table.state(0))
         assertNull(table.compiled(0))
 
-        val compiled = RunnableCompiledFunction { }
+        val compiled = SimpleCompiledFunction { }
         deferred.complete(compiled)
 
         // Completion handler should publish the result immediately

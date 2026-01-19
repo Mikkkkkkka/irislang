@@ -14,10 +14,15 @@ class MockJitCompiler(
     override fun compile(funcIndex: Int): CompiledFunction = thunk(funcIndex)
 }
 
-/**
- * Trivial compiled function that just runs a callback. VM-free placeholder.
- */
 class RunnableCompiledFunction(
+    private val action: (VirtualMachine) -> Unit
+) : CompiledFunction {
+    override fun execute(vm: VirtualMachine) {
+        action(vm)
+    }
+}
+
+class SimpleCompiledFunction(
     private val action: () -> Unit
 ) : CompiledFunction {
     override fun execute(vm: VirtualMachine) {

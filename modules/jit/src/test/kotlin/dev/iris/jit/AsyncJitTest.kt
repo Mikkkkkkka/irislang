@@ -3,7 +3,7 @@ package dev.iris.jit
 import dev.iris.jit.runtime.AsyncJit
 import dev.iris.jit.runtime.JitState
 import dev.iris.jit.support.MockJitCompiler
-import dev.iris.jit.support.RunnableCompiledFunction
+import dev.iris.jit.support.SimpleCompiledFunction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -18,7 +18,7 @@ class AsyncJitTest {
         var compiledCount = 0
         val compiler = MockJitCompiler { _ ->
             compiledCount++
-            RunnableCompiledFunction { /* noop */ }
+            SimpleCompiledFunction { }
         }
         val jit = AsyncJit(compiler, funcCount = 1)
 
