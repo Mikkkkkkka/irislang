@@ -16,6 +16,6 @@ sealed interface Decl {
 
     data class Structure (
         val name: String,
-        val params: List<Stmt.VarDecl>,
+        val fields: List<Stmt.VarDecl>,
     ) : Decl
 }

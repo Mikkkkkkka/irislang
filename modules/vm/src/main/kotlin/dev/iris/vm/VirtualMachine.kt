@@ -1,94 +1,455 @@
 package dev.iris.vm
 
 import dev.iris.core.bytecode.BytecodeProgram
-import dev.iris.core.bytecode.Instr
 import dev.iris.core.bytecode.OpCode
 
-class VirtualMachine {
-    private val stack = ArrayDeque<Long>()
-    private var locals = LongArray(256)
-    private var globals = LongArray(256)
+/**
+ * Stack-based virtual machine with async JIT support.
+ *
+ * The VM is single-threaded for execution. JIT compilation happens
+ * asynchronously in background threads.
+ */
+class VirtualMachine(
+    private val jit: JitHooks? = null,
+    private val gcTriggerThreshold: Int = 100  // Trigger GC every N allocations
+) {
 
+    // Operand stack for expression evaluation
+    private val stack = ArrayDeque<Value>()
+
+    // Call stack for function frames
+    private val callStack = ArrayDeque<CallFrame>()
+
+    // Heap for arrays and structs
+    private val heap = Heap()
+
+    // Garbage collector
+    private val gc = GarbageCollector(heap)
+
+    // Global variables
+    private val globals = mutableListOf<Value>()
+
+    // Current instruction pointer
+    private var ip = 0
+
+    // Allocation counter for GC triggering
+    private var allocationsSinceLastGc = 0
+
+    /**
+     * Push a value onto the operand stack.
+     */
+    fun push(value: Value) {
+        stack.addLast(value)
+    }
+
+    /**
+     * Pop a value from the operand stack.
+     */
+    fun pop(): Value {
+        if (stack.isEmpty()) error("Stack underflow")
+        return stack.removeLast()
+    }
+
+    /**
+     * Peek at top of stack without removing.
+     */
+    fun peek(): Value {
+        if (stack.isEmpty()) error("Stack underflow")
+        return stack.last()
+    }
+
+    /**
+     * Allocate an array on the heap.
+     */
+    fun allocArray(size: Int): Value.HeapRef {
+        val ref = heap.allocArray(size)
+        trackAllocation()
+        return Value.HeapRef(ref)
+    }
+
+    /**
+     * Allocate a struct on the heap.
+     */
+    fun allocStruct(typeIndex: Int, fieldCount: Int): Value.HeapRef {
+        val ref = heap.allocStruct(typeIndex, fieldCount)
+        trackAllocation()
+        return Value.HeapRef(ref)
+    }
+
+    /**
+     * Track an allocation and trigger GC if threshold is reached.
+     */
+    private fun trackAllocation() {
+        allocationsSinceLastGc++
+        if (allocationsSinceLastGc >= gcTriggerThreshold) {
+            collectGarbage()
+            allocationsSinceLastGc = 0
+        }
+    }
+
+    /**
+     * Get heap object by reference.
+     */
+    fun getHeapObject(address: Long): HeapObject {
+        return heap.get(address)
+    }
+
+    /**
+     * Run garbage collection.
+     * Collects from all roots: stack, call frames, globals.
+     */
+    fun collectGarbage() {
+        val roots = mutableListOf<Value>()
+
+        // Add operand stack
+        roots.addAll(stack)
+
+        // Add locals from all call frames
+        callStack.forEach { frame ->
+            roots.addAll(frame.locals)
+        }
+
+        // Add globals
+        roots.addAll(globals)
+
+        gc.collect(roots)
+    }
+
+    /**
+     * Execute a bytecode program.
+     */
     fun run(program: BytecodeProgram, stdout: (String) -> Unit = ::println): VmResult {
         val code = program.instructions
-        var ip = 0
+        ip = 0
+
+        // Initialize with a main call frame if functions are defined
+        if (program.functions.isNotEmpty()) {
+            val mainFunc = program.functions.find { it.startIp == 0 }
+            if (mainFunc != null) {
+                val frame = CallFrame(
+                    funcIndex = 0,
+                    returnIp = -1,  // Sentinel value for main function
+                    locals = Array(mainFunc.localCount) { Value.Int(0) },
+                    basePointer = 0
+                )
+                callStack.addLast(frame)
+            }
+        }
 
         while (ip in code.indices) {
-            val ins = code[ip]
-            when (ins.op) {
-                OpCode.PUSH_I64 -> stack.addLast(ins.operand!!)
-                OpCode.PUSH_TRUE -> stack.addLast(1L)
-                OpCode.PUSH_FALSE -> stack.addLast(0L)
-                OpCode.POP -> stack.removeLast()
-                OpCode.DUP -> stack.addLast(stack.last())
+            val instr = code[ip]
 
-                OpCode.ADD -> binaryOp { a, b -> a + b }
-                OpCode.SUB -> binaryOp { a, b -> a - b }
-                OpCode.MUL -> binaryOp { a, b -> a * b }
-                OpCode.DIV -> binaryOp { a, b -> a / b }
-                OpCode.MOD -> binaryOp { a, b -> a % b }
-                OpCode.NEG -> stack.addLast(-stack.removeLast())
+            when (instr.op) {
+                OpCode.PUSH_I64 -> {
+                    val value = instr.operand ?: error("Missing operand for PUSH_I64")
+                    push(Value.Int(value))
+                }
 
-                OpCode.CMP_EQ -> binaryOp { a, b -> if (a == b) 1L else 0L }
-                OpCode.CMP_NE -> binaryOp { a, b -> if (a != b) 1L else 0L }
-                OpCode.CMP_LT -> binaryOp { a, b -> if (a < b) 1L else 0L }
-                OpCode.CMP_LE -> binaryOp { a, b -> if (a <= b) 1L else 0L }
-                OpCode.CMP_GT -> binaryOp { a, b -> if (a > b) 1L else 0L }
-                OpCode.CMP_GE -> binaryOp { a, b -> if (a >= b) 1L else 0L }
+                OpCode.PRINT_I64 -> {
+                    val value = pop()
+                    stdout(value.toInt().toString())
+                }
 
-                OpCode.AND -> binaryOp { a, b -> if (a != 0L && b != 0L) 1L else 0L }
-                OpCode.OR -> binaryOp { a, b -> if (a != 0L || b != 0L) 1L else 0L }
-                OpCode.NOT -> stack.addLast(if (stack.removeLast() == 0L) 1L else 0L)
+                OpCode.PRINT_BOOL -> {
+                    val value = pop()
+                    stdout(value.toBool().toString())
+                }
 
-                OpCode.LOAD_LOCAL -> stack.addLast(locals[ins.operand!!.toInt()])
-                OpCode.STORE_LOCAL -> locals[ins.operand!!.toInt()] = stack.removeLast()
-                OpCode.LOAD_GLOBAL -> stack.addLast(globals[ins.operand!!.toInt()])
-                OpCode.STORE_GLOBAL -> globals[ins.operand!!.toInt()] = stack.removeLast()
+                OpCode.HALT -> {
+                    return VmResult(exitCode = 0)
+                }
+
+                OpCode.ADD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a + b))
+                }
+
+                OpCode.SUB -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a - b))
+                }
+
+                OpCode.MUL -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a * b))
+                }
+
+                OpCode.DIV -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Division by zero")
+                    push(Value.Int(a / b))
+                }
+
+                OpCode.MOD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Modulo by zero")
+                    push(Value.Int(a % b))
+                }
+
+                OpCode.NEG -> {
+                    val a = pop().toInt()
+                    push(Value.Int(-a))
+                }
+
+                OpCode.PUSH_TRUE -> push(Value.Bool(true))
+                OpCode.PUSH_FALSE -> push(Value.Bool(false))
+
+                OpCode.CMP_EQ -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a == b) 1 else 0))
+                }
+
+                OpCode.CMP_NE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a != b) 1 else 0))
+                }
+
+                OpCode.CMP_LT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a < b) 1 else 0))
+                }
+
+                OpCode.CMP_LE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a <= b) 1 else 0))
+                }
+
+                OpCode.CMP_GT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a > b) 1 else 0))
+                }
+
+                OpCode.CMP_GE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a >= b) 1 else 0))
+                }
+
+                OpCode.AND -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a && b) 1 else 0))
+                }
+
+                OpCode.OR -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a || b) 1 else 0))
+                }
+
+                OpCode.NOT -> {
+                    val a = pop().toBool()
+                    push(Value.Int(if (!a) 1 else 0))
+                }
 
                 OpCode.JMP -> {
-                    ip = ins.operand!!.toInt()
-                    continue
+                    val target = instr.operand ?: error("Missing operand for JMP")
+                    ip = target.toInt() - 1  // -1 because ip++ at end of loop
                 }
+
                 OpCode.JMP_IF_FALSE -> {
-                    if (stack.removeLast() == 0L) {
-                        ip = ins.operand!!.toInt()
-                        continue
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_FALSE")
+                    val condition = pop().toBool()
+                    if (!condition) {
+                        ip = target.toInt() - 1  // -1 because ip++ at end of loop
                     }
                 }
+
                 OpCode.JMP_IF_TRUE -> {
-                    if (stack.removeLast() != 0L) {
-                        ip = ins.operand!!.toInt()
-                        continue
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_TRUE")
+                    val condition = pop().toBool()
+                    if (condition) {
+                        ip = target.toInt() - 1  // -1 because ip++ at end of loop
                     }
                 }
 
-                OpCode.CALL -> error("CALL not implemented in basic VM")
-                OpCode.RET -> return VmResult(exitCode = 0)
-                OpCode.RET_VOID -> return VmResult(exitCode = 0)
+                OpCode.LOAD_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_GLOBAL")
+                    // Ensure globals list is large enough
+                    while (globals.size <= index) {
+                        globals.add(Value.Int(0))
+                    }
+                    push(globals[index])
+                }
 
-                OpCode.ALLOC_ARR -> error("ALLOC_ARR not implemented in basic VM")
-                OpCode.LOAD_ARR -> error("LOAD_ARR not implemented in basic VM")
-                OpCode.STORE_ARR -> error("STORE_ARR not implemented in basic VM")
-                OpCode.ALLOC_STRUCT -> error("ALLOC_STRUCT not implemented in basic VM")
-                OpCode.LOAD_FIELD -> error("LOAD_FIELD not implemented in basic VM")
-                OpCode.STORE_FIELD -> error("STORE_FIELD not implemented in basic VM")
-                OpCode.NEW -> error("NEW not implemented in basic VM")
+                OpCode.STORE_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_GLOBAL")
+                    val value = pop()
+                    // Ensure globals list is large enough
+                    while (globals.size <= index) {
+                        globals.add(Value.Int(0))
+                    }
+                    globals[index] = value
+                }
 
-                OpCode.PRINT_I64 -> stdout(stack.removeLast().toString())
-                OpCode.PRINT_BOOL -> stdout(if (stack.removeLast() != 0L) "правда" else "ложь")
+                OpCode.LOAD_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for LOAD_LOCAL")
+                    val frame = callStack.last()
+                    if (index >= frame.locals.size) error("Local index out of bounds: $index")
+                    push(frame.locals[index])
+                }
 
-                OpCode.HALT -> return VmResult(exitCode = 0)
+                OpCode.STORE_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for STORE_LOCAL")
+                    val frame = callStack.last()
+                    if (index >= frame.locals.size) error("Local index out of bounds: $index")
+                    frame.locals[index] = pop()
+                }
+
+                OpCode.CALL -> {
+                    val funcIndex = instr.operand?.toInt() ?: error("Missing operand for CALL")
+                    if (funcIndex >= program.functions.size) error("Function index out of bounds: $funcIndex")
+
+                    // JIT integration: check if function is compiled
+                    val compiled = jit?.getCompiled(funcIndex)
+                    if (compiled != null) {
+                        // Execute compiled version
+                        compiled.execute(this)
+                    } else {
+                        // Notify JIT about the call (for hot function detection)
+                        jit?.notifyCall(funcIndex)
+
+                        // Interpret the function
+                        val funcInfo = program.functions[funcIndex]
+                        val frame = CallFrame(
+                            funcIndex = funcIndex,
+                            returnIp = ip + 1,  // Return to next instruction after CALL
+                            locals = Array(funcInfo.localCount) { Value.Int(0) },
+                            basePointer = stack.size
+                        )
+                        callStack.addLast(frame)
+                        ip = funcInfo.startIp - 1  // -1 because ip++ at end of loop
+                    }
+                }
+
+                OpCode.RET -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    val returnValue = pop()
+                    val frame = callStack.removeLast()
+                    if (frame.returnIp == -1) {
+                        // Returning from main, halt execution
+                        push(returnValue)
+                        return VmResult(exitCode = 0)
+                    }
+                    ip = frame.returnIp - 1  // -1 because ip++ at end of loop
+                    push(returnValue)
+                }
+
+                OpCode.RET_VOID -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    val frame = callStack.removeLast()
+                    if (frame.returnIp == -1) {
+                        // Returning from main, halt execution
+                        return VmResult(exitCode = 0)
+                    }
+                    ip = frame.returnIp - 1  // -1 because ip++ at end of loop
+                }
+
+                OpCode.POP -> {
+                    pop()
+                }
+
+                OpCode.DUP -> {
+                    val value = peek()
+                    push(value)
+                }
+
+                OpCode.ALLOC_ARR -> {
+                    val size = pop().toInt().toInt()
+                    if (size < 0) error("Negative array size: $size")
+                    val ref = allocArray(size)
+                    push(ref)
+                }
+
+                OpCode.STORE_ARR -> {
+                    val value = pop()
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("STORE_ARR expects HeapRef, got $arrayRef")
+
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("STORE_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+
+                    obj.elements[index] = value
+                }
+
+                OpCode.LOAD_ARR -> {
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("LOAD_ARR expects HeapRef, got $arrayRef")
+
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("LOAD_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+
+                    push(obj.elements[index])
+                }
+
+                OpCode.ALLOC_STRUCT -> {
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for ALLOC_STRUCT")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+
+                OpCode.STORE_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for STORE_FIELD")
+                    val value = pop()
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("STORE_FIELD expects HeapRef, got $structRef")
+
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("STORE_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+
+                    obj.fields[fieldIndex] = value
+                }
+
+                OpCode.LOAD_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for LOAD_FIELD")
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("LOAD_FIELD expects HeapRef, got $structRef")
+
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("LOAD_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+
+                    push(obj.fields[fieldIndex])
+                }
+
+                OpCode.NEW -> {
+                    // NEW is treated as an alias for ALLOC_STRUCT
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for NEW")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+
+                else -> error("Unimplemented opcode: ${instr.op}")
             }
+
             ip++
         }
+
         return VmResult(exitCode = 1)
     }
-
-    private inline fun binaryOp(op: (Long, Long) -> Long) {
-        val b = stack.removeLast()
-        val a = stack.removeLast()
-        stack.addLast(op(a, b))
-    }
-
-    fun topOfStack(): Long? = stack.lastOrNull()
 }

@@ -3,6 +3,7 @@ package dev.iris.core.ast
 sealed interface Expr {
     data class IntLiteral(val value: Int) : Expr
     data class BoolLiteral(val value: Boolean) : Expr
+    data object NullLiteral : Expr
     data class Var(val name: String) : Expr
 
     data class Binary(val left: Expr, val operator: Operator, val right: Expr) : Expr
@@ -14,5 +15,7 @@ sealed interface Expr {
     data class Deref(val expr: Expr) : Expr
     data class Addr(val expr: Expr) : Expr
 
-    data class New(val type: TypeRef, val expr: Expr?) : Expr
+    data class New(val type: TypeRef, val size: Expr?) : Expr
+
+    data class Assign(val target: Expr, val expr: Expr) : Expr
 }
