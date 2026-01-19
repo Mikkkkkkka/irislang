@@ -42,7 +42,7 @@ class Parser(
         }
 
         return ParseResult(
-            Program(declarations = decls, statements = stmts),
+            Program(decls, stmts),
             diagnostics
         )
     }
@@ -92,7 +92,7 @@ class Parser(
             val type = parseTypeRef()
             val nameTok = expect(TokenKind.IDENT, "Ожидалось имя поля структуры после типа.")
             expectStmtTerminator("Ожидался ';' после объявления поля структуры.")
-            Stmt.VarDecl(name = nameTok.lexeme, type = type)
+            Stmt.VarDecl(type, nameTok.lexeme)
         } catch (_: ParsePanic) {
             synchronizeInBlock()
             null
@@ -144,7 +144,7 @@ class Parser(
         do {
             val type = parseTypeRef()
             val nameTok = expect(TokenKind.IDENT, "Ожидалось имя параметра после типа.")
-            params += Stmt.VarDecl(name = nameTok.lexeme, type = type)
+            params += Stmt.VarDecl(type, nameTok.lexeme)
         } while (match(TokenKind.COMMA))
 
         return params
@@ -265,7 +265,7 @@ class Parser(
         } else null
 
         expectStmtTerminator("Ожидался ';' после объявления переменной.")
-        return Stmt.VarDecl(type = type, name = nameTok.lexeme, init = init)
+        return Stmt.VarDecl(type, nameTok.lexeme, init)
     }
 
     private fun parsePrintStmt(): Stmt {
@@ -285,7 +285,7 @@ class Parser(
         // Choose representation:
         // 1) if you have Stmt.Print -> return Stmt.Print(arg)
         // 2) otherwise encode as call
-        return Stmt.ExprStmt(Expr.Call(callee = "печать", args = listOf(arg)))
+        return Stmt.ExprStmt(Expr.Call("печать", listOf(arg)))
     }
 
     // Типы
@@ -313,7 +313,9 @@ class Parser(
     }
 
     private fun isTypeStart(kind: TokenKind): Boolean =
-        kind == TokenKind.KW_INT || kind == TokenKind.KW_BOOL || kind == TokenKind.IDENT && tokens[pos + 1].kind == TokenKind.IDENT   // Очень криво проверяем, "а точно ли это кастомная структура?"
+        kind == TokenKind.KW_INT ||
+                kind == TokenKind.KW_BOOL ||
+                (kind == TokenKind.IDENT && tokens[pos + 1].kind == TokenKind.IDENT)    // Очень криво проверяем, "а точно ли это кастомная структура?"
 
     // Выражения
     /**
@@ -420,7 +422,7 @@ class Parser(
             expr = when {
                 match(TokenKind.DOT) -> {
                     val fieldTok = expect(TokenKind.IDENT, "Ожидалось имя поля после '.'.")
-                    Expr.FieldAccess(target = expr, field = fieldTok.lexeme)
+                    Expr.FieldAccess(expr,  fieldTok.lexeme)
                 }
 
                 match(TokenKind.LPAREN) -> {
@@ -432,7 +434,7 @@ class Parser(
                             "<invalid>"
                         }
                     }
-                    Expr.Call(callee = calleeName, args = args)
+                    Expr.Call(calleeName, args)
                 }
 
                 else -> return expr
@@ -459,7 +461,7 @@ class Parser(
     private fun parsePrimary(): Expr {
         if (match(TokenKind.KW_NEW)) {
             expect(TokenKind.COLON, "Ожидался ':' после 'новый'.")
-            val t = parseTypeRef()
+            val type = parseTypeRef()
 
             var size: Expr? = null
             if (match(TokenKind.COLON)) {
@@ -487,7 +489,7 @@ class Parser(
                 }
             }
 
-            return Expr.New(type = t, size = size)
+            return Expr.New(type, size)
         }
 
         if (match(TokenKind.INT_LITERAL)) {
