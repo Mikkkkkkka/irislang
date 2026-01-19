@@ -26,8 +26,15 @@ class EndToEndPipelineTest {
         assertTrue(compileResult.diagnostics.isEmpty(), "Compiler diagnostics: ${compileResult.diagnostics}")
 
         val vm = VirtualMachine()
-        vm.run(compileResult.program!!, printer)
+        vm.run(compileResult.program, printer)
         return vm
+    }
+
+    private fun runAndCollectOutput(source: String): String {
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
+        parseAndCompileAndRun(source, printer)
+        return output
     }
 
     private fun compileAndGetBytecode(source: String): dev.iris.core.bytecode.BytecodeProgram {
@@ -45,7 +52,7 @@ class EndToEndPipelineTest {
         assertNotNull(compileResult.program, "Compilation failed: ${compileResult.diagnostics}")
         assertTrue(compileResult.diagnostics.isEmpty(), "Compiler diagnostics: ${compileResult.diagnostics}")
 
-        return compileResult.program!!
+        return compileResult.program
     }
 
     @Test
@@ -61,9 +68,15 @@ class EndToEndPipelineTest {
             кц
 
             целч результат = факториал(5);
+            печать:результат;
         """.trimIndent()
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "120\n"
+
+        parseAndCompileAndRun(source, printer)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -78,10 +91,15 @@ class EndToEndPipelineTest {
                 вернуть н * факториал(н - 1);
             кц
 
-            целч результат = факториал(10);
+            печать:(факториал(10));
         """.trimIndent()
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "3628800\n"
+
+        parseAndCompileAndRun(source, printer)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -100,9 +118,19 @@ class EndToEndPipelineTest {
             целч ф2 = факт(1);
             целч ф3 = факт(3);
             целч ф4 = факт(5);
+            печать:ф1;
+            печать:ф2;
+            печать:ф3;
+            печать:ф4;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
+
+        val expectedOutput = "1\n1\n6\n120\n"
+
+        parseAndCompileAndRun(source, printer)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -122,9 +150,17 @@ class EndToEndPipelineTest {
 
             целч р5 = факториалИтер(5);
             целч р10 = факториалИтер(10);
+            печать:р5;
+            печать:р10;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
+
+        val expectedOutput = "120\n3628800\n"
+
+        parseAndCompileAndRun(source, printer)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -137,9 +173,16 @@ class EndToEndPipelineTest {
                 сумма = сумма + к;
                 к = к + 1;
             кц
+            печать:сумма;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        var output = ""
+        val printer: (String) -> Unit = { message -> output += "$message\n" }
+
+        val expectedOutput = "55\n"
+
+        parseAndCompileAndRun(source, printer)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -157,9 +200,13 @@ class EndToEndPipelineTest {
                 кц
                 к = к + 1;
             кц
+            печать:итого;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "12\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -176,9 +223,13 @@ class EndToEndPipelineTest {
                 счетчик = счетчик + 1;
                 к = к + 1;
             кц
+            печать:счетчик;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "10\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -195,9 +246,13 @@ class EndToEndPipelineTest {
                 кц
                 сумма = сумма + к;
             кц
+            печать:сумма;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "25\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -228,9 +283,19 @@ class EndToEndPipelineTest {
             бул п7 = простое(7);
             бул п9 = простое(9);
             бул п11 = простое(11);
+            печать:п2;
+            печать:п3;
+            печать:п4;
+            печать:п5;
+            печать:п7;
+            печать:п9;
+            печать:п11;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "true\ntrue\nfalse\ntrue\ntrue\nfalse\ntrue\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -264,9 +329,14 @@ class EndToEndPipelineTest {
 
             целч простыхДо10 = счетПростых(10);
             целч простыхДо20 = счетПростых(20);
+            печать:простыхДо10;
+            печать:простыхДо20;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "4\n8\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -286,9 +356,15 @@ class EndToEndPipelineTest {
             целч р1 = нод(48, 18);
             целч р2 = нод(100, 35);
             целч р3 = нод(17, 13);
+            печать:р1;
+            печать:р2;
+            печать:р3;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "6\n5\n1\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -301,9 +377,17 @@ class EndToEndPipelineTest {
             целч произв = а * б;
             целч частн = а / б;
             целч остат = а % б;
+            печать:сумма;
+            печать:разн;
+            печать:произв;
+            печать:частн;
+            печать:остат;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "13\n7\n30\n3\n1\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -317,9 +401,18 @@ class EndToEndPipelineTest {
             бул большеРавно = а >= б;
             бул равно = а == б;
             бул неРавно = а != б;
+            печать:меньше;
+            печать:меньшеРавно;
+            печать:больше;
+            печать:большеРавно;
+            печать:равно;
+            печать:неРавно;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "true\ntrue\nfalse\nfalse\nfalse\ntrue\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -331,9 +424,16 @@ class EndToEndPipelineTest {
             бул резИли = а или б;
             бул неА = !а;
             бул неБ = !б;
+            печать:резИ;
+            печать:резИли;
+            печать:неА;
+            печать:неБ;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "false\ntrue\nfalse\ntrue\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -349,9 +449,13 @@ class EndToEndPipelineTest {
             нч
                 результат = 2;
             кц
+            печать:результат;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "1\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -371,9 +475,13 @@ class EndToEndPipelineTest {
             нч
                 категория = 3;
             кц
+            печать:категория;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "2\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -400,9 +508,15 @@ class EndToEndPipelineTest {
             целч м1 = макс(10, 20);
             целч м2 = мин(10, 20);
             целч м3 = макс(мин(15, 25), макс(5, 10));
+            печать:м1;
+            печать:м2;
+            печать:м3;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "20\n10\n15\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -419,9 +533,14 @@ class EndToEndPipelineTest {
 
             целч ф5 = фиб(5);
             целч ф10 = фиб(10);
+            печать:ф5;
+            печать:ф10;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "5\n55\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -442,9 +561,15 @@ class EndToEndPipelineTest {
             целч р1 = степень(2, 10);
             целч р2 = степень(3, 5);
             целч р3 = степень(5, 3);
+            печать:р1;
+            печать:р2;
+            печать:р3;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "1024\n243\n125\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -460,9 +585,13 @@ class EndToEndPipelineTest {
             увеличить(10);
             увеличить(20);
             увеличить(15);
+            печать:глобал;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "45\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -472,9 +601,13 @@ class EndToEndPipelineTest {
             целч б = 3;
             целч в = 2;
             целч результат = (а + б) * в - (а - б) / в + а % б;
+            печать:результат;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "17\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -497,9 +630,14 @@ class EndToEndPipelineTest {
 
             целч с10 = суммаЧетных(10);
             целч с20 = суммаЧетных(20);
+            печать:с10;
+            печать:с20;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "30\n110\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -524,9 +662,14 @@ class EndToEndPipelineTest {
 
             целч п5 = симуляцияСортировки(5);
             целч п10 = симуляцияСортировки(10);
+            печать:п5;
+            печать:п10;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "10\n45\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -557,9 +700,16 @@ class EndToEndPipelineTest {
             целч итер5 = фактИтер(5);
             целч рекурс10 = фактРекурс(10);
             целч итер10 = фактИтер(10);
+            печать:рекурс5;
+            печать:итер5;
+            печать:рекурс10;
+            печать:итер10;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "120\n120\n3628800\n3628800\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -576,9 +726,14 @@ class EndToEndPipelineTest {
 
             целч а1 = абс(5);
             целч а2 = абс(0);
+            печать:а1;
+            печать:а2;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "5\n0\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -598,9 +753,15 @@ class EndToEndPipelineTest {
             целч с123 = суммаЦифр(123);
             целч с9999 = суммаЦифр(9999);
             целч с12345 = суммаЦифр(12345);
+            печать:с123;
+            печать:с9999;
+            печать:с12345;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "6\n36\n15\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -625,9 +786,16 @@ class EndToEndPipelineTest {
             целч ц2 = числоЦифр(5);
             целч ц3 = числоЦифр(123);
             целч ц4 = числоЦифр(99999);
+            печать:ц1;
+            печать:ц2;
+            печать:ц3;
+            печать:ц4;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "1\n1\n3\n5\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -649,9 +817,13 @@ class EndToEndPipelineTest {
             кц
 
             целч р = объединить(10);
+            печать:р;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "50\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -677,9 +849,15 @@ class EndToEndPipelineTest {
             целч р1 = ранийВозврат(5);
             целч р2 = ранийВозврат(0);
             целч р3 = ранийВозврат(15);
+            печать:р1;
+            печать:р2;
+            печать:р3;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "2\n1\n3\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -696,6 +874,8 @@ class EndToEndPipelineTest {
 
             целч результат5 = факториал(5);
             целч результат10 = факториал(10);
+            печать:результат5;
+            печать:результат10;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -727,6 +907,11 @@ class EndToEndPipelineTest {
             it.op == dev.iris.core.bytecode.OpCode.SUB
         }
         assertTrue(hasSubInstruction, "bytecode should contain SUB instructions")
+
+        val expectedOutput = "120\n3628800\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -746,6 +931,8 @@ class EndToEndPipelineTest {
 
             целч сумма10 = суммироватьДиапазон(1, 10);
             целч сумма100 = суммироватьДиапазон(1, 100);
+            печать:сумма10;
+            печать:сумма100;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -774,6 +961,11 @@ class EndToEndPipelineTest {
             it.op == dev.iris.core.bytecode.OpCode.CMP_LE
         }
         assertTrue(hasCmpLe, "bytecode should contain CMP_LE for loop condition")
+
+        val expectedOutput = "55\n5050\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -800,6 +992,7 @@ class EndToEndPipelineTest {
             кц
 
             целч результат = считатьДелящиесяНа3(30);
+            печать:результат;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -821,6 +1014,11 @@ class EndToEndPipelineTest {
             it.op == dev.iris.core.bytecode.OpCode.CMP_EQ
         }
         assertTrue(hasCmpEq, "bytecode should contain CMP_EQ instructions")
+
+        val expectedOutput = "10\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -840,6 +1038,8 @@ class EndToEndPipelineTest {
 
             целч квадраты5 = суммаКвадратов(5);
             целч квадраты10 = суммаКвадратов(10);
+            печать:квадраты5;
+            печать:квадраты10;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -863,6 +1063,11 @@ class EndToEndPipelineTest {
             it.op == dev.iris.core.bytecode.OpCode.MUL
         }
         assertTrue(mulCount >= 1, "bytecode should contain at least 1 MUL")
+
+        val expectedOutput = "55\n385\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -889,9 +1094,24 @@ class EndToEndPipelineTest {
             целч ф9 = факториал(9);
             целч ф10 = факториал(10);
             целч ф12 = факториал(12);
+            печать:ф0;
+            печать:ф1;
+            печать:ф2;
+            печать:ф3;
+            печать:ф4;
+            печать:ф5;
+            печать:ф6;
+            печать:ф7;
+            печать:ф8;
+            печать:ф9;
+            печать:ф10;
+            печать:ф12;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "1\n1\n2\n6\n24\n120\n720\n5040\n40320\n362880\n3628800\n479001600\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -912,9 +1132,15 @@ class EndToEndPipelineTest {
             целч сумма5 = заполнитьИСуммировать(5);
             целч сумма10 = заполнитьИСуммировать(10);
             целч сумма100 = заполнитьИСуммировать(100);
+            печать:сумма5;
+            печать:сумма10;
+            печать:сумма100;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "100\n450\n49500\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -964,9 +1190,15 @@ class EndToEndPipelineTest {
             целч простыхДо10 = считатьПростые(10);
             целч простыхДо50 = считатьПростые(50);
             целч простыхДо100 = считатьПростые(100);
+            печать:простыхДо10;
+            печать:простыхДо50;
+            печать:простыхДо100;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "4\n15\n25\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -996,9 +1228,15 @@ class EndToEndPipelineTest {
             целч р1 = вложенныеЦиклы(10, 10);
             целч р2 = вложенныеЦиклы(5, 20);
             целч р3 = вложенныеЦиклы(20, 5);
+            печать:р1;
+            печать:р2;
+            печать:р3;
         """.trimIndent()
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "109\n104\n119\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -1010,6 +1248,7 @@ class EndToEndPipelineTest {
             кц
 
             целч р = тест(5);
+            печать:р;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -1022,7 +1261,10 @@ class EndToEndPipelineTest {
         }
         assertTrue(hasHalt, "bytecode should end with HALT")
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "6\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 
     @Test
@@ -1088,6 +1330,12 @@ class EndToEndPipelineTest {
             целч сумма100 = суммаДиапазона(100);
             целч простыхДо20 = считатьПростые(20);
             целч простыхДо50 = считатьПростые(50);
+            печать:ф5;
+            печать:ф10;
+            печать:сумма10;
+            печать:сумма100;
+            печать:простыхДо20;
+            печать:простыхДо50;
         """.trimIndent()
 
         val bytecode = compileAndGetBytecode(source)
@@ -1106,6 +1354,9 @@ class EndToEndPipelineTest {
         val countPrimesFunc = bytecode.functions.find { it.name == "считатьПростые" }
         assertNotNull(countPrimesFunc, "countPrimes function should exist")
 
-        parseAndCompileAndRun(source)
+        val expectedOutput = "120\n3628800\n55\n5050\n8\n15\n"
+
+        val output = runAndCollectOutput(source)
+        assertEquals(expectedOutput, output)
     }
 }
