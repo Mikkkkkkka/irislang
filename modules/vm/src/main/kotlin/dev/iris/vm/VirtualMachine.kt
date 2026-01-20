@@ -116,6 +116,14 @@ class VirtualMachine(
     }
 
     /**
+     * Get the current number of objects in the heap.
+     * Useful for testing and monitoring memory usage.
+     */
+    fun heapObjectCount(): Int {
+        return heap.allocatedCount
+    }
+
+    /**
      * Execute a bytecode program.
      */
     fun run(program: BytecodeProgram, stdout: (String) -> Unit = ::println): VmResult {
