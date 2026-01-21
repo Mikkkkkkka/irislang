@@ -31,8 +31,21 @@ class ProgramFunctionProvider(
             program.instructions.size
         }
 
-        // Extract function body
-        return program.instructions.subList(startIp, endIp)
+        // Extract function body and rewrite jump targets to be relative to function start
+        val slice = program.instructions.subList(startIp, endIp)
+        return slice.map { instr ->
+            val op = instr.op
+            if (op == dev.iris.core.bytecode.OpCode.JMP ||
+                op == dev.iris.core.bytecode.OpCode.JMP_IF_FALSE ||
+                op == dev.iris.core.bytecode.OpCode.JMP_IF_TRUE
+            ) {
+                val target = instr.operand ?: -1
+                val relative = target - startIp
+                Instr(op, relative.toLong())
+            } else {
+                instr
+            }
+        }
     }
 
     override fun getConstPool(): List<Long> = emptyList()
@@ -46,7 +59,8 @@ class ProgramFunctionProvider(
         return FunctionMeta(
             arity = funcInfo.paramCount,
             localsCount = funcInfo.localCount,
-            stackLimit = 64  // Conservative estimate
+            stackLimit = 64,  // Conservative estimate
+            startIp = funcInfo.startIp
         )
     }
 }

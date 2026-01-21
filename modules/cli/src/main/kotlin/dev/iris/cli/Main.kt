@@ -1,11 +1,12 @@
 package dev.iris.cli
 
 import dev.iris.compiler.Compiler
-import dev.iris.jit.pipeline.BaselineCodeEmitter
 import dev.iris.jit.pipeline.BytecodeLowering
 import dev.iris.jit.pipeline.PipelineJitCompiler
+import dev.iris.jit.pipeline.VmIntegratedCodeEmitter
 import dev.iris.jit.runtime.AsyncJit
-import dev.iris.jit.support.SingleFunctionProvider
+import dev.iris.jit.runtime.asJitHooks
+import dev.iris.jit.support.ProgramFunctionProvider
 import dev.iris.parser.lexer.Lexer
 import dev.iris.parser.parser.Parser
 import dev.iris.vm.VirtualMachine
@@ -79,21 +80,22 @@ fun main(args: Array<String>) {
     val jit = if (disableJit) {
         null
     } else {
-        val provider = SingleFunctionProvider(bytecode)
-        val jitCompiler = PipelineJitCompiler(BytecodeLowering(provider), BaselineCodeEmitter())
-        AsyncJit(compiler = jitCompiler, funcCount = 1).also { it.ensureCompilation(funcIndex = 0) }
+        val provider = ProgramFunctionProvider(bytecode)
+        val jitCompiler = PipelineJitCompiler(BytecodeLowering(provider), VmIntegratedCodeEmitter(bytecode))
+        AsyncJit(compiler = jitCompiler, funcCount = bytecode.functions.size).also { jit ->
+            repeat(bytecode.functions.size) { idx -> jit.ensureCompilation(funcIndex = idx) }
+        }
     }
 
-    val vm = VirtualMachine()
+    val vm = VirtualMachine(jit = jit?.asJitHooks())
+    val startNs = System.nanoTime()
     val result = vm.run(bytecode)
+    val elapsedMs = (System.nanoTime() - startNs) / 1_000_000.0
+    System.err.println("[time] execute=${"%.2f".format(elapsedMs)} ms (jit=${jit != null})")
 
     if (jit != null) {
-        val compiled = jit.compiled(0)
-        if (compiled != null) {
-            System.err.println("[jit] ready (hook it into CALL dispatch later)")
-        } else {
-            System.err.println("[jit] not ready yet (expected for tiny programs)")
-        }
+        val readyCount = (0 until bytecode.functions.size).count { jit.compiled(it) != null }
+        System.err.println("[jit] compiled functions: $readyCount/${bytecode.functions.size}")
         jit.close()
     }
     exitProcess(result.exitCode)

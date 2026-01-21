@@ -1,5 +1,6 @@
 package dev.iris.jit.pipeline
 
+import dev.iris.core.bytecode.BytecodeProgram
 import dev.iris.core.bytecode.OpCode
 import dev.iris.jit.api.CompiledFunction
 import dev.iris.vm.Value
@@ -16,7 +17,9 @@ import dev.iris.vm.VirtualMachine
  * - ALLOC_ARR, LOAD_ARR, STORE_ARR (arrays via VM heap)
  * - ALLOC_STRUCT, LOAD_FIELD, STORE_FIELD (structs via VM heap)
  */
-class VmIntegratedCodeEmitter : CodeEmitter {
+class VmIntegratedCodeEmitter(
+    private val program: BytecodeProgram
+) : CodeEmitter {
 
     override fun emit(function: LoweredFunction): CompiledFunction {
         val instrs = function.instructions
@@ -134,6 +137,27 @@ class VmIntegratedCodeEmitter : CodeEmitter {
                             vm.push(Value.Int(if (!a) 1 else 0))
                         }
 
+                        OpCode.JMP -> {
+                            val target = instr.operand?.toInt() ?: error("Missing operand for JMP")
+                            ip = target - 1
+                        }
+
+                        OpCode.JMP_IF_FALSE -> {
+                            val target = instr.operand?.toInt() ?: error("Missing operand for JMP_IF_FALSE")
+                            val condition = vm.pop().toBool()
+                            if (!condition) {
+                                ip = target - 1
+                            }
+                        }
+
+                        OpCode.JMP_IF_TRUE -> {
+                            val target = instr.operand?.toInt() ?: error("Missing operand for JMP_IF_TRUE")
+                            val condition = vm.pop().toBool()
+                            if (condition) {
+                                ip = target - 1
+                            }
+                        }
+
                         OpCode.ALLOC_ARR -> {
                             val size = vm.pop().toInt().toInt()
                             if (size < 0) error("Negative array size: $size")
@@ -216,6 +240,29 @@ class VmIntegratedCodeEmitter : CodeEmitter {
                             vm.push(ref)
                         }
 
+                        OpCode.LOAD_LOCAL -> {
+                            val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_LOCAL")
+                            val value = vm.loadLocal(index)
+                            vm.push(value)
+                        }
+
+                        OpCode.STORE_LOCAL -> {
+                            val index = instr.operand?.toInt() ?: error("Missing operand for STORE_LOCAL")
+                            val value = vm.pop()
+                            vm.storeLocal(index, value)
+                        }
+
+                        OpCode.LOAD_GLOBAL -> {
+                            val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_GLOBAL")
+                            vm.push(vm.loadGlobal(index))
+                        }
+
+                        OpCode.STORE_GLOBAL -> {
+                            val index = instr.operand?.toInt() ?: error("Missing operand for STORE_GLOBAL")
+                            val value = vm.pop()
+                            vm.storeGlobal(index, value)
+                        }
+
                         OpCode.RET -> {
                             // Return from compiled function - leave result on stack for VM to handle
                             return
@@ -233,34 +280,17 @@ class VmIntegratedCodeEmitter : CodeEmitter {
 
                         // Opcodes that require VM integration - not supported in compiled code
                         OpCode.CALL -> {
-                            error("CALL not supported in compiled code - functions should be compiled as whole units")
-                        }
-
-                        OpCode.JMP, OpCode.JMP_IF_FALSE, OpCode.JMP_IF_TRUE -> {
-                            // Control flow should be handled by lowering phase
-                            error("Control flow opcodes should be lowered before code emission")
-                        }
-
-                        OpCode.LOAD_LOCAL -> {
-                            val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_LOCAL")
-                            val value = vm.loadLocal(index)
-                            vm.push(value)
-                        }
-
-                        OpCode.STORE_LOCAL -> {
-                            val index = instr.operand?.toInt() ?: error("Missing operand for STORE_LOCAL")
-                            val value = vm.pop()
-                            vm.storeLocal(index, value)
-                        }
-
-                        OpCode.LOAD_GLOBAL, OpCode.STORE_GLOBAL -> {
-                            // Global variables are rare in hot functions, keep in interpreted code
-                            error("Global variable opcodes not supported in compiled code")
+                            val funcIndex = instr.operand?.toInt() ?: error("Missing operand for CALL")
+                            vm.executeFunction(program, funcIndex)
                         }
 
                         OpCode.PRINT_I64, OpCode.PRINT_BOOL -> {
-                            // Print opcodes should remain in interpreted code
-                            error("Print opcodes not supported in compiled code")
+                            val value = vm.pop()
+                            if (instr.op == OpCode.PRINT_I64) {
+                                vm.printI64(value.toInt())
+                            } else {
+                                vm.printBool(value.toBool())
+                            }
                         }
 
                         else -> error("Unimplemented opcode in VmIntegratedCodeEmitter: ${instr.op}")

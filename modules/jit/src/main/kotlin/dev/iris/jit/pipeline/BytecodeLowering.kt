@@ -1,6 +1,7 @@
 package dev.iris.jit.pipeline
 
 import dev.iris.jit.api.BytecodeProvider
+import dev.iris.core.bytecode.OpCode
 
 /**
  * Converts VM bytecode into a lowered IR understood by the emitter.
@@ -12,6 +13,7 @@ class BytecodeLowering(
     fun lower(funcIndex: Int): LoweredFunction {
         val meta = provider.getFunctionMeta(funcIndex)
         val instrs = provider.getFunctionBytecode(funcIndex)
-        return LoweredFunction(funcIndex, meta, instrs)
+        val startIp = meta.startIp
+        return LoweredFunction(funcIndex, startIp, meta, instrs)
     }
 }
