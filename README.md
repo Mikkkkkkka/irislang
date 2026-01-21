@@ -1,6 +1,6 @@
-# IRIS (Information Systems) — multi-module Kotlin project
+# IRIS (Information Systems) -- a programming language
 
-This is a starter multi-module project for your language:
+This is a starter multi-module project for the IRIS language:
 
 - `core` — shared types (AST, bytecode, diagnostics)
 - `parser` — lexer + parser -> AST
@@ -27,5 +27,5 @@ Run demo (no args):
 
 Run a file:
 ```bash
-./gradlew :cli:run --args="examples/hello.is"
+./gradlew :cli:run --args="../../examples/hello.is"
 ```
