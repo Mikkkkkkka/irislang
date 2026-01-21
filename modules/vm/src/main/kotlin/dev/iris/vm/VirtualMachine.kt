@@ -35,6 +35,9 @@ class VirtualMachine(
     // Allocation counter for GC triggering
     private var allocationsSinceLastGc = 0
 
+    // Output sink, set per run
+    private var stdoutFn: (String) -> Unit = ::println
+
     /**
      * Push a value onto the operand stack.
      */
@@ -56,28 +59,6 @@ class VirtualMachine(
     fun peek(): Value {
         if (stack.isEmpty()) error("Stack underflow")
         return stack.last()
-    }
-
-    /**
-     * Load a local variable from the current call frame.
-     * Used by compiled code to access function parameters and locals.
-     */
-    fun loadLocal(index: Int): Value {
-        if (callStack.isEmpty()) error("No call frame for loadLocal")
-        val frame = callStack.last()
-        if (index >= frame.locals.size) error("Local index out of bounds: $index")
-        return frame.locals[index]
-    }
-
-    /**
-     * Store a value into a local variable in the current call frame.
-     * Used by compiled code to set function parameters and locals.
-     */
-    fun storeLocal(index: Int, value: Value) {
-        if (callStack.isEmpty()) error("No call frame for storeLocal")
-        val frame = callStack.last()
-        if (index >= frame.locals.size) error("Local index out of bounds: $index")
-        frame.locals[index] = value
     }
 
     /**
@@ -138,6 +119,301 @@ class VirtualMachine(
     }
 
     /**
+    * Accessors for compiled code to read/write locals.
+    */
+    fun loadLocal(index: Int): Value {
+        if (callStack.isEmpty()) error("No call frame for LOAD_LOCAL")
+        val frame = callStack.last()
+        if (index >= frame.locals.size) error("Local index out of bounds: $index")
+        return frame.locals[index]
+    }
+
+    fun storeLocal(index: Int, value: Value) {
+        if (callStack.isEmpty()) error("No call frame for STORE_LOCAL")
+        val frame = callStack.last()
+        if (index >= frame.locals.size) error("Local index out of bounds: $index")
+        frame.locals[index] = value
+    }
+
+    fun loadGlobal(index: Int): Value {
+        while (globals.size <= index) {
+            globals.add(Value.Int(0))
+        }
+        return globals[index]
+    }
+
+    fun storeGlobal(index: Int, value: Value) {
+        while (globals.size <= index) {
+            globals.add(Value.Int(0))
+        }
+        globals[index] = value
+    }
+
+    fun printI64(value: Long) {
+        stdoutFn(value.toString())
+    }
+
+    fun printBool(value: Boolean) {
+        stdoutFn(value.toString())
+    }
+
+    /**
+     * Execute a function (interpreted) by index in the given program.
+     * Leaves return value (if any) on the VM stack.
+     */
+    fun executeFunction(program: BytecodeProgram, funcIndex: Int) {
+        if (funcIndex >= program.functions.size) error("Function index out of bounds: $funcIndex")
+
+        val funcInfo = program.functions[funcIndex]
+        val frame = CallFrame(
+            funcIndex = funcIndex,
+            returnIp = -2,  // sentinel for nested call from compiled code
+            locals = Array(funcInfo.localCount) { Value.Int(0) },
+            basePointer = stack.size
+        )
+        callStack.addLast(frame)
+
+        var localIp = funcInfo.startIp
+        val code = program.instructions
+
+        while (localIp in code.indices) {
+            val instr = code[localIp]
+            when (instr.op) {
+                OpCode.PUSH_I64 -> {
+                    val value = instr.operand ?: error("Missing operand for PUSH_I64")
+                    push(Value.Int(value))
+                }
+                OpCode.PUSH_TRUE -> push(Value.Bool(true))
+                OpCode.PUSH_FALSE -> push(Value.Bool(false))
+                OpCode.PRINT_I64 -> {
+                    val value = pop()
+                    printI64(value.toInt())
+                }
+                OpCode.PRINT_BOOL -> {
+                    val value = pop()
+                    printBool(value.toBool())
+                }
+                OpCode.ADD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a + b))
+                }
+                OpCode.SUB -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a - b))
+                }
+                OpCode.MUL -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(a * b))
+                }
+                OpCode.DIV -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Division by zero")
+                    push(Value.Int(a / b))
+                }
+                OpCode.MOD -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    if (b == 0L) error("Modulo by zero")
+                    push(Value.Int(a % b))
+                }
+                OpCode.NEG -> {
+                    val a = pop().toInt()
+                    push(Value.Int(-a))
+                }
+                OpCode.CMP_EQ -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a == b) 1 else 0))
+                }
+                OpCode.CMP_NE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a != b) 1 else 0))
+                }
+                OpCode.CMP_LT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a < b) 1 else 0))
+                }
+                OpCode.CMP_LE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a <= b) 1 else 0))
+                }
+                OpCode.CMP_GT -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a > b) 1 else 0))
+                }
+                OpCode.CMP_GE -> {
+                    val b = pop().toInt()
+                    val a = pop().toInt()
+                    push(Value.Int(if (a >= b) 1 else 0))
+                }
+                OpCode.AND -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a && b) 1 else 0))
+                }
+                OpCode.OR -> {
+                    val b = pop().toBool()
+                    val a = pop().toBool()
+                    push(Value.Int(if (a || b) 1 else 0))
+                }
+                OpCode.NOT -> {
+                    val a = pop().toBool()
+                    push(Value.Int(if (!a) 1 else 0))
+                }
+                OpCode.JMP -> {
+                    val target = instr.operand ?: error("Missing operand for JMP")
+                    localIp = target.toInt() - 1
+                }
+                OpCode.JMP_IF_FALSE -> {
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_FALSE")
+                    val condition = pop().toBool()
+                    if (!condition) {
+                        localIp = target.toInt() - 1
+                    }
+                }
+                OpCode.JMP_IF_TRUE -> {
+                    val target = instr.operand ?: error("Missing operand for JMP_IF_TRUE")
+                    val condition = pop().toBool()
+                    if (condition) {
+                        localIp = target.toInt() - 1
+                    }
+                }
+                OpCode.LOAD_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_GLOBAL")
+                    push(loadGlobal(index))
+                }
+                OpCode.STORE_GLOBAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_GLOBAL")
+                    val value = pop()
+                    storeGlobal(index, value)
+                }
+                OpCode.LOAD_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for LOAD_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for LOAD_LOCAL")
+                    val top = callStack.last()
+                    if (index >= top.locals.size) error("Local index out of bounds: $index")
+                    push(top.locals[index])
+                }
+                OpCode.STORE_LOCAL -> {
+                    val index = instr.operand?.toInt() ?: error("Missing operand for STORE_LOCAL")
+                    if (callStack.isEmpty()) error("No call frame for STORE_LOCAL")
+                    val top = callStack.last()
+                    if (index >= top.locals.size) error("Local index out of bounds: $index")
+                    top.locals[index] = pop()
+                }
+                OpCode.CALL -> {
+                    val targetFunc = instr.operand?.toInt() ?: error("Missing operand for CALL")
+                    val compiled = jit?.getCompiled(targetFunc)
+                    if (compiled != null) {
+                        val targetInfo = program.functions[targetFunc]
+                        val newFrame = CallFrame(
+                            funcIndex = targetFunc,
+                            returnIp = -2,
+                            locals = Array(targetInfo.localCount) { Value.Int(0) },
+                            basePointer = stack.size
+                        )
+                        callStack.addLast(newFrame)
+                        compiled.execute(this)
+                        callStack.removeLast()
+                    } else {
+                        jit?.notifyCall(targetFunc)
+                        executeFunction(program, targetFunc)
+                    }
+                }
+                OpCode.RET -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    val returnValue = pop()
+                    callStack.removeLast()
+                    push(returnValue)
+                    return
+                }
+                OpCode.RET_VOID -> {
+                    if (callStack.isEmpty()) error("No call frame to return from")
+                    callStack.removeLast()
+                    return
+                }
+                OpCode.POP -> pop()
+                OpCode.DUP -> {
+                    val value = peek()
+                    push(value)
+                }
+                OpCode.ALLOC_ARR -> {
+                    val size = pop().toInt().toInt()
+                    if (size < 0) error("Negative array size: $size")
+                    val ref = allocArray(size)
+                    push(ref)
+                }
+                OpCode.STORE_ARR -> {
+                    val value = pop()
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("STORE_ARR expects HeapRef, got $arrayRef")
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("STORE_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+                    obj.elements[index] = value
+                }
+                OpCode.LOAD_ARR -> {
+                    val index = pop().toInt().toInt()
+                    val arrayRef = pop()
+                    if (arrayRef !is Value.HeapRef) error("LOAD_ARR expects HeapRef, got $arrayRef")
+                    val obj = getHeapObject(arrayRef.address)
+                    if (obj !is HeapObject.Array) error("LOAD_ARR expects Array, got $obj")
+                    if (index < 0 || index >= obj.size) error("Array index out of bounds: $index (size: ${obj.size})")
+                    push(obj.elements[index])
+                }
+                OpCode.ALLOC_STRUCT -> {
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for ALLOC_STRUCT")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+                OpCode.STORE_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for STORE_FIELD")
+                    val value = pop()
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("STORE_FIELD expects HeapRef, got $structRef")
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("STORE_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+                    obj.fields[fieldIndex] = value
+                }
+                OpCode.LOAD_FIELD -> {
+                    val fieldIndex = instr.operand?.toInt() ?: error("Missing operand for LOAD_FIELD")
+                    val structRef = pop()
+                    if (structRef !is Value.HeapRef) error("LOAD_FIELD expects HeapRef, got $structRef")
+                    val obj = getHeapObject(structRef.address)
+                    if (obj !is HeapObject.Struct) error("LOAD_FIELD expects Struct, got $obj")
+                    if (fieldIndex < 0 || fieldIndex >= obj.fields.size) {
+                        error("Field index out of bounds: $fieldIndex (field count: ${obj.fields.size})")
+                    }
+                    push(obj.fields[fieldIndex])
+                }
+                OpCode.NEW -> {
+                    val typeIndex = instr.operand?.toInt() ?: error("Missing operand for NEW")
+                    val fieldCount = pop().toInt().toInt()
+                    if (fieldCount < 0) error("Negative field count: $fieldCount")
+                    val ref = allocStruct(typeIndex, fieldCount)
+                    push(ref)
+                }
+                OpCode.HALT -> return
+            }
+            localIp++
+        }
+    }
+
+    /**
      * Get the current number of objects in the heap.
      * Useful for testing and monitoring memory usage.
      */
@@ -151,6 +427,7 @@ class VirtualMachine(
     fun run(program: BytecodeProgram, stdout: (String) -> Unit = ::println): VmResult {
         val code = program.instructions
         ip = 0
+        stdoutFn = stdout
 
         // Initialize with a main call frame if functions are defined
         if (program.functions.isNotEmpty()) {
@@ -181,12 +458,12 @@ class VirtualMachine(
 
                 OpCode.PRINT_I64 -> {
                     val value = pop()
-                    stdout(value.toInt().toString())
+                    stdoutFn(value.toInt().toString())
                 }
 
                 OpCode.PRINT_BOOL -> {
                     val value = pop()
-                    stdout(value.toBool().toString())
+                    stdoutFn(value.toBool().toString())
                 }
 
                 OpCode.HALT -> {
@@ -364,8 +641,11 @@ class VirtualMachine(
                         compiled.execute(this)
                         // Compiled code leaves return value on stack
                         // Pop the call frame we created
-                        callStack.removeLast()
-                        // Continue execution after CALL (ip++ happens at end of loop)
+                        val frame = callStack.removeLast()
+                        if (frame.returnIp == -1) {
+                            return VmResult(exitCode = 0)
+                        }
+                        ip = frame.returnIp - 1  // -1 because ip++ at end of loop
                     } else {
                         // Notify JIT about the call (for hot function detection)
                         jit?.notifyCall(funcIndex)

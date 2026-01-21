@@ -8,6 +8,7 @@ import dev.iris.jit.api.FunctionMeta
  */
 data class LoweredFunction(
     val funcIndex: Int,
+    val startIp: Int,
     val meta: FunctionMeta,
     val instructions: List<Instr>
 )

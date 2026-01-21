@@ -11,7 +11,7 @@ class OptimizingLowering(
         val meta = provider.getFunctionMeta(funcIndex)
         val instrs = provider.getFunctionBytecode(funcIndex)
         val optimized = applyOptimizations(instrs)
-        return LoweredFunction(funcIndex, meta, optimized)
+        return LoweredFunction(funcIndex, meta.startIp, meta, optimized)
     }
 
     private fun applyOptimizations(instructions: List<Instr>): List<Instr> {
