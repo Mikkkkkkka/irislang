@@ -132,7 +132,7 @@ class VirtualMachine(
 
         // Initialize with a main call frame if functions are defined
         if (program.functions.isNotEmpty()) {
-            val mainIndex = program.functions.indexOfFirst { it.name == "main" }
+            val mainIndex = program.functions.indexOfFirst { it.name == "главная" }
             if (mainIndex >= 0) {
                 val mainFunc = program.functions[mainIndex]
                 val frame = CallFrame(
