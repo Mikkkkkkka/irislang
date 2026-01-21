@@ -6,7 +6,7 @@ Checkout [Language-spec](docs/language-spec.md), to familiarize with the syntax 
 - `parser` — lexer + parser -> AST
 - `compiler` — AST -> bytecode
 - `vm` — bytecode interpreter
-- `jit` — async JIT placeholder (compile in background, fallback to interpreter)
+- `jit` — async JIT compiler (compile in background, fallback to interpreter)
 - `cli` — command-line runner
 
 ## Requirements
