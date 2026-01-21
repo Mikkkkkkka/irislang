@@ -1,14 +1,21 @@
 package dev.iris.vm
 
 import dev.iris.core.bytecode.*
+import dev.iris.jit.pipeline.BytecodeLowering
+import dev.iris.jit.pipeline.PipelineJitCompiler
+import dev.iris.jit.pipeline.VmIntegratedCodeEmitter
+import dev.iris.jit.runtime.AsyncJit
+import dev.iris.jit.runtime.asJitHooks
+import dev.iris.jit.support.ProgramFunctionProvider
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 import kotlin.system.measureTimeMillis
 
 /**
  * Тест, демонстрирующий пользу JIT компиляции.
  *
- * Сравнение производительности: интерпретация vs JIT-компиляция.
+ * Сравнение производительности: интерпретация vs реальная JIT-компиляция с VmIntegratedCodeEmitter.
  */
 class JitBenchmarkTest {
 
@@ -18,12 +25,12 @@ class JitBenchmarkTest {
      * Демонстрирует, что JIT версия работает значительно быстрее.
      */
     @Test
-    fun `JIT compilation speeds up execution`() {
-        val iterations = 500
-        val program = createFibonacciProgram(iterations)
+    fun `JIT compilation speeds up execution`() = runBlocking {
+        val iterations = 100000
+        val program = createComputeProgram(iterations)
 
         println("\n=== JIT PERFORMANCE COMPARISON ===")
-        println("Program: Calling fibonacci(10) $iterations times\n")
+        println("Program: Calling compute(a, b, c) = (a + b) * c - 10, $iterations times\n")
 
         // 1. Запуск БЕЗ JIT (чистая интерпретация)
         val vmInterpreted = VirtualMachine(jit = null)
@@ -32,22 +39,25 @@ class JitBenchmarkTest {
             vmInterpreted.run(program) { outputInterpreted.add(it) }
         }
 
-        // 2. Запуск С JIT (компиляция после 10 вызовов)
-        val jitHooks = createOptimizingJitHooks(
-            compileAfterCalls = 10,
-            funcIndex = 0,
-            behavior = { vm ->
-                vm.push(Value.Int(55))  // fib(10) = 55
-            }
+        // 2. Запуск С настоящим JIT (VmIntegratedCodeEmitter)
+        val provider = ProgramFunctionProvider(program)
+        val jitCompiler = PipelineJitCompiler(
+            BytecodeLowering(provider),
+            VmIntegratedCodeEmitter()
         )
-        val vmCompiled = VirtualMachine(jit = jitHooks)
+        val asyncJit = AsyncJit(compiler = jitCompiler, funcCount = 1)
+
+        // Pre-compile function before benchmark
+        asyncJit.ensureCompilation(0)?.await()
+
+        val vmCompiled = VirtualMachine(jit = asyncJit.asJitHooks())
         val outputCompiled = mutableListOf<String>()
         val timeCompiled = measureTimeMillis {
             vmCompiled.run(program) { outputCompiled.add(it) }
         }
 
         println("WITHOUT JIT: ${timeInterpreted}ms (interpreted)")
-        println("WITH JIT:    ${timeCompiled}ms (compiled after 10 calls)")
+        println("WITH JIT:    ${timeCompiled}ms (compiled)")
 
         val speedup = if (timeCompiled > 0) {
             timeInterpreted.toDouble() / timeCompiled.toDouble()
@@ -57,10 +67,13 @@ class JitBenchmarkTest {
         println("Speedup:     ${String.format("%.2f", speedup)}x")
 
         // Оба должны дать одинаковый результат
-        assertTrue(
-            outputInterpreted.last() == outputCompiled.last(),
+        assertEquals(
+            outputInterpreted.last(),
+            outputCompiled.last(),
             "Both versions should produce same result"
         )
+
+        asyncJit.close()
 
         println("\n✓ JIT compilation provides significant speedup")
     }
@@ -68,9 +81,12 @@ class JitBenchmarkTest {
     // === Helper Functions ===
 
     /**
-     * Создает программу, вызывающую функцию фибоначчи много раз.
+     * Создает программу, вызывающую простую вычислительную функцию много раз.
+     *
+     * Функция compute(a, b, c) = (a + b) * c - 10
+     * Эта функция НЕ содержит CALL или JMP, поэтому может быть скомпилирована VmIntegratedCodeEmitter.
      */
-    private fun createFibonacciProgram(iterations: Int): BytecodeProgram {
+    private fun createComputeProgram(iterations: Int): BytecodeProgram {
         val instructions = mutableListOf<Instr>()
 
         // Инициализация счетчика
@@ -87,8 +103,10 @@ class JitBenchmarkTest {
         instructions.add(Instr(OpCode.JMP_IF_FALSE, 0))
         val exitJumpIndex = instructions.size - 1
 
-        // Тело цикла: вызов fibonacci(10)
-        instructions.add(Instr(OpCode.PUSH_I64, 10))
+        // Тело цикла: вызов compute(5, 7, 3)
+        instructions.add(Instr(OpCode.PUSH_I64, 5))
+        instructions.add(Instr(OpCode.PUSH_I64, 7))
+        instructions.add(Instr(OpCode.PUSH_I64, 3))
         instructions.add(Instr(OpCode.CALL, 0))
         instructions.add(Instr(OpCode.STORE_GLOBAL, 1))
 
@@ -110,78 +128,31 @@ class JitBenchmarkTest {
         instructions.add(Instr(OpCode.PRINT_I64))
         instructions.add(Instr(OpCode.HALT))
 
-        // Функция fibonacci (рекурсивная)
-        val fibStart = instructions.size
-        instructions.add(Instr(OpCode.STORE_LOCAL, 0))
-        instructions.add(Instr(OpCode.LOAD_LOCAL, 0))
-        instructions.add(Instr(OpCode.PUSH_I64, 2))
-        instructions.add(Instr(OpCode.CMP_LT))
-        instructions.add(Instr(OpCode.JMP_IF_FALSE, 0))
-        val recursiveJumpIndex = instructions.size - 1
-
-        // Базовый случай
-        instructions.add(Instr(OpCode.LOAD_LOCAL, 0))
-        instructions.add(Instr(OpCode.RET))
-
-        // Рекурсивный случай
-        val recursiveCase = instructions.size
-        instructions[recursiveJumpIndex] = Instr(OpCode.JMP_IF_FALSE, recursiveCase.toLong())
-
-        instructions.add(Instr(OpCode.LOAD_LOCAL, 0))
-        instructions.add(Instr(OpCode.PUSH_I64, 1))
-        instructions.add(Instr(OpCode.SUB))
-        instructions.add(Instr(OpCode.CALL, 0))
-
-        instructions.add(Instr(OpCode.LOAD_LOCAL, 0))
-        instructions.add(Instr(OpCode.PUSH_I64, 2))
-        instructions.add(Instr(OpCode.SUB))
-        instructions.add(Instr(OpCode.CALL, 0))
-
-        instructions.add(Instr(OpCode.ADD))
+        // Функция compute(a, b, c) = (a + b) * c - 10
+        val computeStart = instructions.size
+        instructions.add(Instr(OpCode.STORE_LOCAL, 2))  // c
+        instructions.add(Instr(OpCode.STORE_LOCAL, 1))  // b
+        instructions.add(Instr(OpCode.STORE_LOCAL, 0))  // a
+        instructions.add(Instr(OpCode.LOAD_LOCAL, 0))   // a
+        instructions.add(Instr(OpCode.LOAD_LOCAL, 1))   // b
+        instructions.add(Instr(OpCode.ADD))              // a + b
+        instructions.add(Instr(OpCode.LOAD_LOCAL, 2))   // c
+        instructions.add(Instr(OpCode.MUL))              // (a + b) * c
+        instructions.add(Instr(OpCode.PUSH_I64, 10))    // 10
+        instructions.add(Instr(OpCode.SUB))              // (a + b) * c - 10
         instructions.add(Instr(OpCode.RET))
 
         return BytecodeProgram(
             instructions = instructions,
             functions = listOf(
                 FunctionInfo(
-                    name = "fibonacci",
-                    startIp = fibStart,
-                    paramCount = 1,
-                    localCount = 1,
+                    name = "compute",
+                    startIp = computeStart,
+                    paramCount = 3,
+                    localCount = 3,
                     returnsValue = true
                 )
             )
         )
-    }
-
-    /**
-     * Создает JIT hooks, которые компилируют функцию после N вызовов.
-     */
-    private fun createOptimizingJitHooks(
-        compileAfterCalls: Int,
-        funcIndex: Int,
-        behavior: (VirtualMachine) -> Unit
-    ): JitHooks {
-        return object : JitHooks {
-            private var callCount = 0
-            private var compiled: CompiledCode? = null
-
-            override fun getCompiled(funcIdx: Int): CompiledCode? {
-                return if (funcIdx == funcIndex) compiled else null
-            }
-
-            override fun notifyCall(funcIdx: Int) {
-                if (funcIdx == funcIndex) {
-                    callCount++
-                    if (callCount == compileAfterCalls && compiled == null) {
-                        compiled = object : CompiledCode {
-                            override fun execute(vm: VirtualMachine) {
-                                behavior(vm)
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
