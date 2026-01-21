@@ -59,6 +59,28 @@ class VirtualMachine(
     }
 
     /**
+     * Load a local variable from the current call frame.
+     * Used by compiled code to access function parameters and locals.
+     */
+    fun loadLocal(index: Int): Value {
+        if (callStack.isEmpty()) error("No call frame for loadLocal")
+        val frame = callStack.last()
+        if (index >= frame.locals.size) error("Local index out of bounds: $index")
+        return frame.locals[index]
+    }
+
+    /**
+     * Store a value into a local variable in the current call frame.
+     * Used by compiled code to set function parameters and locals.
+     */
+    fun storeLocal(index: Int, value: Value) {
+        if (callStack.isEmpty()) error("No call frame for storeLocal")
+        val frame = callStack.last()
+        if (index >= frame.locals.size) error("Local index out of bounds: $index")
+        frame.locals[index] = value
+    }
+
+    /**
      * Allocate an array on the heap.
      */
     fun allocArray(size: Int): Value.HeapRef {
@@ -320,24 +342,31 @@ class VirtualMachine(
                     val funcIndex = instr.operand?.toInt() ?: error("Missing operand for CALL")
                     if (funcIndex >= program.functions.size) error("Function index out of bounds: $funcIndex")
 
+                    val funcInfo = program.functions[funcIndex]
+
+                    // Create call frame (needed by both compiled and interpreted code)
+                    val frame = CallFrame(
+                        funcIndex = funcIndex,
+                        returnIp = ip + 1,  // Return to next instruction after CALL
+                        locals = Array(funcInfo.localCount) { Value.Int(0) },
+                        basePointer = stack.size
+                    )
+                    callStack.addLast(frame)
+
                     // JIT integration: check if function is compiled
                     val compiled = jit?.getCompiled(funcIndex)
                     if (compiled != null) {
                         // Execute compiled version
                         compiled.execute(this)
+                        // Compiled code leaves return value on stack
+                        // Pop the call frame we created
+                        callStack.removeLast()
+                        // Continue execution after CALL (ip++ happens at end of loop)
                     } else {
                         // Notify JIT about the call (for hot function detection)
                         jit?.notifyCall(funcIndex)
 
                         // Interpret the function
-                        val funcInfo = program.functions[funcIndex]
-                        val frame = CallFrame(
-                            funcIndex = funcIndex,
-                            returnIp = ip + 1,  // Return to next instruction after CALL
-                            locals = Array(funcInfo.localCount) { Value.Int(0) },
-                            basePointer = stack.size
-                        )
-                        callStack.addLast(frame)
                         ip = funcInfo.startIp - 1  // -1 because ip++ at end of loop
                     }
                 }
