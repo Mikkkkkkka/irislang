@@ -1,5 +1,7 @@
 # IRIS (Information Systems) -- a programming language
 
+Checkout (Language-spec)[docs/language-spec.md], to familiarize with the syntax of IRIS!
+
 This is a starter multi-module project for the IRIS language:
 
 - `core` — shared types (AST, bytecode, diagnostics)
