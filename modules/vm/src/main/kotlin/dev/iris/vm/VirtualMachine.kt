@@ -132,15 +132,19 @@ class VirtualMachine(
 
         // Initialize with a main call frame if functions are defined
         if (program.functions.isNotEmpty()) {
-            val mainFunc = program.functions.find { it.startIp == 0 }
-            if (mainFunc != null) {
+            val mainIndex = program.functions.indexOfFirst { it.name == "main" }
+            if (mainIndex >= 0) {
+                val mainFunc = program.functions[mainIndex]
                 val frame = CallFrame(
-                    funcIndex = 0,
+                    funcIndex = mainIndex,
                     returnIp = -1,  // Sentinel value for main function
                     locals = Array(mainFunc.localCount) { Value.Int(0) },
                     basePointer = 0
                 )
                 callStack.addLast(frame)
+                ip = mainFunc.startIp
+            } else {
+                error("Missing `главная` function")
             }
         }
 
