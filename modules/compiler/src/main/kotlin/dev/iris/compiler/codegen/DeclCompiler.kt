@@ -13,6 +13,7 @@ class DeclCompiler(private val ctx: CompilerContext) {
 
     fun compile(program: Program) {
         registerDeclarations(program)
+        compileTopLevelStatements(program)
         compileDeclarations(program)
     }
 
@@ -147,6 +148,28 @@ class DeclCompiler(private val ctx: CompilerContext) {
             paramCount = decl.params.size,
             localCount = localCount,
             returnsValue = false
+        )
+    }
+
+    private fun compileTopLevelStatements(program: Program) {
+        if (program.statements.isEmpty()) return
+
+        val mainStartIp = ctx.emitter.currentAddress()
+
+        for (stmt in program.statements) {
+            stmtCompiler.compile(stmt)
+        }
+
+        ctx.emitter.emit(OpCode.HALT)
+
+        ctx.functions.add(
+            FunctionInfo(
+                name = "main",
+                startIp = mainStartIp,
+                paramCount = 0,
+                localCount = 0,
+                returnsValue = false
+            )
         )
     }
 }

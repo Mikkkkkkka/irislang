@@ -74,7 +74,8 @@ class SimpleParseTest {
             val op = if (instr.operand != null) " ${instr.operand}" else ""
             output.appendLine("$idx: ${instr.op}$op")
         }
-        java.io.File("/tmp/bytecode.txt").writeText(output.toString())
+        val tmpFile = java.io.File(System.getProperty("java.io.tmpdir"), "bytecode.txt")
+        tmpFile.writeText(output.toString())
     }
 
     @Test

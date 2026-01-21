@@ -18,7 +18,7 @@ import dev.iris.vm.VirtualMachine
  * - ALLOC_STRUCT, LOAD_FIELD, STORE_FIELD (structs via VM heap)
  */
 class VmIntegratedCodeEmitter(
-    private val program: BytecodeProgram
+    private val program: BytecodeProgram = BytecodeProgram(emptyList())
 ) : CodeEmitter {
 
     override fun emit(function: LoweredFunction): CompiledFunction {

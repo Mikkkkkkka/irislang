@@ -429,9 +429,9 @@ class VirtualMachine(
         ip = 0
         stdoutFn = stdout
 
-        // Initialize with a main call frame if functions are defined
+        // Initialize with a main call frame if functions are defined and a main entry exists
         if (program.functions.isNotEmpty()) {
-            val mainIndex = program.functions.indexOfFirst { it.name == "главная" }
+            val mainIndex = program.functions.indexOfFirst { it.name == "главная" || it.name == "main" }
             if (mainIndex >= 0) {
                 val mainFunc = program.functions[mainIndex]
                 val frame = CallFrame(
@@ -443,7 +443,8 @@ class VirtualMachine(
                 callStack.addLast(frame)
                 ip = mainFunc.startIp
             } else {
-                error("Missing `главная` function")
+                // No explicit main: treat program as script starting at ip=0 without call frame
+                ip = 0
             }
         }
 

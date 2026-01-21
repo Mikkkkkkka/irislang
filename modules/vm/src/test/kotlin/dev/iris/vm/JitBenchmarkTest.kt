@@ -43,7 +43,7 @@ class JitBenchmarkTest {
         val provider = ProgramFunctionProvider(program)
         val jitCompiler = PipelineJitCompiler(
             BytecodeLowering(provider),
-            VmIntegratedCodeEmitter()
+            VmIntegratedCodeEmitter(program)
         )
         val asyncJit = AsyncJit(compiler = jitCompiler, funcCount = 1)
 
