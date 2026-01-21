@@ -22,3 +22,12 @@ class BreakOutsideLoopException :
 
 class ContinueOutsideLoopException :
     CompilerException("Continue statement outside of loop")
+
+class MissingMainFunctionException :
+    CompilerException("Missing required главная function")
+
+class InvalidMainSignatureException(message: String) :
+    CompilerException(message)
+
+class TopLevelStatementsNotAllowedException :
+    CompilerException("Top-level statements are not allowed; move them into главная()")

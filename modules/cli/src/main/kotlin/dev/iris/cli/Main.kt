@@ -28,7 +28,7 @@ fun main(args: Array<String>) {
         }
         Files.readString(sourcePath)
     } else {
-        "печать:1;\nпечать:2;\nпечать:3;\n"
+        "процедура главная()\nнч\n    печать:1;\n    печать:2;\n    печать:3;\nкц\n"
     }
 
     val lexResult = Lexer(source).tokenize()
