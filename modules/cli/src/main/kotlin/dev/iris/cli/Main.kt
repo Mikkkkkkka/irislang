@@ -14,9 +14,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
+val knownArgs = listOf("--emit-bytecode", "--no-jit")
+
 fun main(args: Array<String>) {
     val emitBytecodeOnly = args.contains("--emit-bytecode")
-    val sourceArg = args.firstOrNull { it != "--emit-bytecode" }
+    val disableJit = args.contains("--no-jit")
+    val sourceArg = args.firstOrNull { it !in knownArgs }
     val sourcePath = if (sourceArg != null) Path.of(sourceArg) else null
     val source = if (sourcePath != null) {
         if (!Files.exists(sourcePath)) {
@@ -73,21 +76,25 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
-    val provider = SingleFunctionProvider(bytecode)
-    val jitCompiler = PipelineJitCompiler(BytecodeLowering(provider), BaselineCodeEmitter())
-    val jit = AsyncJit(compiler = jitCompiler, funcCount = 1)
-    jit.ensureCompilation(funcIndex = 0)
+    val jit = if (disableJit) {
+        null
+    } else {
+        val provider = SingleFunctionProvider(bytecode)
+        val jitCompiler = PipelineJitCompiler(BytecodeLowering(provider), BaselineCodeEmitter())
+        AsyncJit(compiler = jitCompiler, funcCount = 1).also { it.ensureCompilation(funcIndex = 0) }
+    }
 
     val vm = VirtualMachine()
     val result = vm.run(bytecode)
 
-    val compiled = jit.compiled(0)
-    if (compiled != null) {
-        System.err.println("[jit] ready (hook it into CALL dispatch later)")
-    } else {
-        System.err.println("[jit] not ready yet (expected for tiny programs)")
+    if (jit != null) {
+        val compiled = jit.compiled(0)
+        if (compiled != null) {
+            System.err.println("[jit] ready (hook it into CALL dispatch later)")
+        } else {
+            System.err.println("[jit] not ready yet (expected for tiny programs)")
+        }
+        jit.close()
     }
-
-    jit.close()
     exitProcess(result.exitCode)
 }
